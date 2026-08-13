@@ -1,0 +1,10 @@
+.Rhistory
+.RData
+.Rproj.user/
+renv/library/
+renv/staging/
+renv/python/
+*.xlsx
+outputs/excel_final/*
+outputs/reportes/*
+outputs/auditoria/*
