@@ -10,5 +10,8 @@ list(
   tar_target(axi, calcular_axi(inventario)),
   tar_target(prueba_global, generar_prueba_global(axi)),
   tar_target(validacion, ejecutar_validaciones(prueba_global)),
-  tar_target(resultados_exportados, exportar_resultados(validacion))
+  tar_target(
+    resultados_exportados,
+    if (isTRUE(validacion$consistente)) exportar_resultados(validacion) else NULL
+  )
 )
