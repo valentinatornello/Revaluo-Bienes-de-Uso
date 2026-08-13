@@ -5,9 +5,7 @@ renv/library/
 renv/staging/
 renv/python/
 outputs/**/*.xlsx
-outputs/excel_final/*
-outputs/reportes/*
-outputs/auditoria/*
+outputs/**/*
 !outputs/excel_final/.gitkeep
 !outputs/reportes/.gitkeep
 !outputs/auditoria/.gitkeep
