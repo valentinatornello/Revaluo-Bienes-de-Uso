@@ -110,6 +110,11 @@ El modelo contempla:
 - Generación de Prueba Global (PG).
 - Validaciones automáticas de consistencia.
 - Trazabilidad completa de cada cálculo realizado.
+## Configuración del entorno
+
+1. Instalar `renv` si no está disponible: `install.packages("renv")`.
+2. Restaurar dependencias del proyecto: `renv::restore()`.
+
 - Exportación de resultados para revisión por los equipos de Impuestos y Contabilidad.
 
 ## Beneficios esperados
