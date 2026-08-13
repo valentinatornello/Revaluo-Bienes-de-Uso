@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Revalúo de Bienes de Uso
 
 ## Descripción
@@ -34,6 +33,11 @@ Centralizar la información de SAP y de los archivos históricos para ejecutar e
 - **Trazabilidad de cálculos**: registro de cada transformación aplicada, desde los datos originales hasta el resultado final.
 - **Exportación para revisión de Impuestos y Contabilidad**: generación de archivos de salida con el detalle necesario para el cierre y la auditoría.
 
+## Configuración del entorno
+
+1. Instalar `renv` si no está disponible: `install.packages("renv")`.
+2. Restaurar dependencias del proyecto: `renv::restore()`.
+
 ## Flujo del proceso
 
 1. **Recepción de insumos**: archivos del ejercicio y archivos históricos del período anterior.
@@ -50,7 +54,7 @@ Centralizar la información de SAP y de los archivos históricos para ejecutar e
 - Archivos de Altas, Bajas y Transferencias del ejercicio.
 - Archivo histórico de revalúo del período anterior.
 - Criterios de vida útil y amortización por rubro.
-- Índices y parámetros de actualización aplicables.
+- Índices y parámetros de actualización aplicables (IPC e IPIM).
 - Archivos auxiliares de validación y soporte.
 
 ## Salidas
@@ -63,15 +67,17 @@ Centralizar la información de SAP y de los archivos históricos para ejecutar e
 - Archivos exportables para revisión funcional.
 
 ## Estructura del repositorio
-revaluo-bienes-de-uso/ 
-├── data/ # Datos crudos, intermedios y procesados 
-├── inputs/ # Fuentes de entrada organizadas por tipo 
-├── outputs/ # Reportes, auditoría y archivo final de salida 
-├── R/ # Scripts del flujo de procesamiento 
-├── docs/ # Documentación funcional y metodológica 
-├── tests/ # Pruebas automatizadas 
-└── _targets.R # Definición del pipeline (targets)
 
+```
+revaluo-bienes-de-uso/
+├── data/              # Datos crudos, intermedios y procesados
+├── inputs/            # Fuentes de entrada organizadas por tipo
+├── outputs/           # Reportes, auditoría y archivo final de salida
+├── R/                 # Scripts del flujo de procesamiento
+├── docs/              # Documentación funcional y metodológica
+├── tests/             # Pruebas automatizadas
+└── _targets.R         # Definición del pipeline (targets)
+```
 
 ### Descripción de directorios
 
@@ -89,45 +95,10 @@ revaluo-bienes-de-uso/
 - Reducción del tiempo operativo del proceso.
 - Disminución de errores por manipulación manual.
 - Reproducibilidad de los cálculos entre períodos.
-=======
-# Revaluo-Bienes-de-Uso
-Automatización del proceso de Revalúo de Bienes de Uso mediante R, consolidando información proveniente de SAP y archivos de trabajo históricos para generar cálculos trazables, reproducibles y auditables de ajuste por inflación y revalúo impositivo.
-
-## Objetivo
-
-Este proyecto tiene como objetivo automatizar el proceso de cálculo del Revalúo de Bienes de Uso utilizado por Monsanto/Bayer Argentina, reemplazando tareas manuales realizadas sobre múltiples archivos Excel por un flujo reproducible desarrollado en R.
-
-La solución busca centralizar la información proveniente de SAP y de los archivos históricos de trabajo, permitiendo ejecutar el proceso de manera estandarizada, transparente y auditable.
-
-## Alcance
-
-El modelo contempla:
-
-- Lectura y consolidación de archivos SAP.
-- Integración de movimientos de Altas, Bajas y Transferencias.
-- Reconstrucción del inventario histórico de activos.
-- Aplicación de cálculos de Ajuste por Inflación.
-- Generación de Prueba Global (PG).
-- Validaciones automáticas de consistencia.
-- Trazabilidad completa de cada cálculo realizado.
-## Configuración del entorno
-
-1. Instalar `renv` si no está disponible: `install.packages("renv")`.
-2. Restaurar dependencias del proyecto: `renv::restore()`.
-
-- Exportación de resultados para revisión por los equipos de Impuestos y Contabilidad.
-
-## Beneficios esperados
-
-- Reducción del tiempo operativo.
-- Disminución de errores manuales.
-- Reproducibilidad del proceso.
->>>>>>> origin/main
 - Menor dependencia de desarrollos externos.
 - Mayor capacidad de auditoría y revisión.
 - Conservación del conocimiento de negocio dentro de la organización.
 
-<<<<<<< HEAD
 ## Principios de diseño
 
 - **Reproducibilidad**: un mismo conjunto de entradas debe producir siempre el mismo resultado.
@@ -146,34 +117,12 @@ El modelo contempla:
 - **targets**: orquestación del pipeline y ejecución reproducible.
 - **renv**: gestión de dependencias y control del entorno.
 
-## Estado actual
-
-Fase inicial de diseño y modelado del flujo de automatización. Se encuentra en curso el relevamiento funcional del proceso, la identificación de reglas de negocio y la estructuración del pipeline técnico.
-
-=======
->>>>>>> origin/main
 ## Equipo
 
 - Pablo Fernández
 - Ricardo Molina
 - Valentina Tornello
 
-<<<<<<< HEAD
-
-
-=======
-## Tecnologías
-
-- R
-- tidyverse
-- readxl
-- openxlsx
-- janitor
-- lubridate
-- targets
-- renv
-
 ## Estado actual
 
-Fase inicial de diseño y modelado del flujo de automatización.
->>>>>>> origin/main
+Fase inicial de diseño y modelado del flujo de automatización. Se encuentra en curso el relevamiento funcional del proceso, la identificación de reglas de negocio y la estructuración del pipeline técnico.
