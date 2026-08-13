@@ -4,7 +4,7 @@
 renv/library/
 renv/staging/
 renv/python/
-*.xlsx
+outputs/**/*.xlsx
 outputs/excel_final/*
 outputs/reportes/*
 outputs/auditoria/*

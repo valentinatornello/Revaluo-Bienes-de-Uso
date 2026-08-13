@@ -8,5 +8,5 @@ required_packages <- c(
 )
 
 load_required_packages <- function(packages = required_packages) {
-  invisible(lapply(packages, require, character.only = TRUE))
+  invisible(lapply(packages, library, character.only = TRUE))
 }
