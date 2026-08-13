@@ -1,4 +1,4 @@
-importar_datos <- function(inputs_dir = "inputs") {
+obtener_rutas_inputs <- function(inputs_dir = "inputs") {
   list(
     sap = file.path(inputs_dir, "SAP"),
     altas = file.path(inputs_dir, "altas"),
@@ -6,4 +6,8 @@ importar_datos <- function(inputs_dir = "inputs") {
     transferencias = file.path(inputs_dir, "transferencias"),
     parametros = file.path(inputs_dir, "parametros")
   )
+}
+
+importar_datos <- function(inputs_dir = "inputs") {
+  obtener_rutas_inputs(inputs_dir)
 }
