@@ -1,10 +1,9 @@
-calcular_axi <- function(datos_rollforward) {
+calcular_axi <- function(datos_rollforward, anio_ejercicio = 2022) {
   inventario <- datos_rollforward$inventario
   indices_ipc <- datos_rollforward$indices_ipc
   indices_ipim <- datos_rollforward$indices_ipim
   indices_ipc_bajas <- datos_rollforward$indices_ipc_bajas
   indices_ipim_bajas <- datos_rollforward$indices_ipim_bajas
-  anio_ejercicio <- 2022
 
   resultado <- list()
 
@@ -134,9 +133,16 @@ calcular_rubro_amortizable <- function(inv, indices_ipc, indices_ipim,
     dplyr::mutate(
       es_vu_agotada_ly = (vut_ly >= vu_asignada & vu_asignada > 0),
 
+      # para bienes que agotaron la VU en el ejercicio anterior, calculamos el
+      # ajuste como la amortizacion que se habria devengado si la VU no estuviera
+      # agotada (o sea, el trimestre normal que no se computa)
       amort_bs_agotaron_vu_ly = dplyr::if_else(
         es_vu_agotada_ly,
-        -amort_hist_ejercicio,
+        -amort_trimestre * dplyr::if_else(
+          anio_alta == anio_ejercicio,
+          calcular_trimestres_primer_anio(mes_alta),
+          pmin(4, vu_asignada - vut_ly + 4)
+        ),
         0
       )
     )
@@ -169,7 +175,12 @@ calcular_terrenos <- function(inv, indices_ipc, indices_ipim, anio_ejercicio) {
       coef_ipc = buscar_coeficiente(fecha_alta, indices_ipc),
       coef_ipim = buscar_coeficiente(fecha_alta, indices_ipim),
 
-      vo_reexp = vo * coef_ipc,
+      # para terrenos pre-2018 usamos IPIM, post-2018 usamos IPC
+      vo_reexp = dplyr::if_else(
+        anio_alta >= ANIO_CORTE_REVALUO,
+        vo * coef_ipc,
+        vo * coef_ipim
+      ),
       amort_hist_reexp = 0,
       amort_acum_ly_reexp = 0,
       amort_acum_cierre_reexp = 0,
@@ -199,9 +210,26 @@ calcular_bajas_reexp <- function(inv, indices_ipc_bajas, indices_ipim_bajas) {
         0
       ),
 
-      amort_bajas = dplyr::if_else(es_baja, amort_acum_cierre, 0),
+      # reexpresamos amort y VR de bajas usando el coeficiente correspondiente
+      amort_bajas = dplyr::if_else(
+        es_baja,
+        dplyr::if_else(
+          anio_alta >= ANIO_CORTE_REVALUO,
+          amort_acum_cierre * coef_ipc_bajas,
+          amort_acum_cierre * coef_ipim_bajas
+        ),
+        0
+      ),
 
-      vr_bajas = dplyr::if_else(es_baja, vr, 0)
+      vr_bajas = dplyr::if_else(
+        es_baja,
+        dplyr::if_else(
+          anio_alta >= ANIO_CORTE_REVALUO,
+          vr * coef_ipc_bajas,
+          vr * coef_ipim_bajas
+        ),
+        0
+      )
     )
 
   inv

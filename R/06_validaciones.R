@@ -151,8 +151,8 @@ validar_vr_formula <- function(resultado_axi) {
     d <- resultado_axi[[rubro]]
     if (nrow(d) == 0) next
 
+    # validamos VR reexpresado para TODOS los activos, no solo post-2018
     reexp <- d %>%
-      dplyr::filter(anio_alta >= ANIO_CORTE_REVALUO) %>%
       dplyr::mutate(
         diff_vr_reexp = abs(vr_reexp - (vo_reexp - amort_acum_cierre_reexp))
       ) %>%

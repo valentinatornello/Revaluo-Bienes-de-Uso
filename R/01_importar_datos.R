@@ -43,7 +43,9 @@ leer_hoja_categoria <- function(path_excel, hoja, config_hoja = NULL) {
     .name_repair = "minimal"
   )
 
-  if (nrow(raw) <= config_hoja$skip) {
+  # si no hay filas despues del header, no hay datos
+
+  if (nrow(raw) <= config_hoja$header_row) {
     return(tibble::tibble())
   }
 
@@ -51,7 +53,8 @@ leer_hoja_categoria <- function(path_excel, hoja, config_hoja = NULL) {
   col_names <- as.character(header_row)
   col_names[is.na(col_names) | col_names == ""] <- paste0("col_", which(is.na(col_names) | col_names == ""))
 
-  datos <- raw[(config_hoja$skip + 1):nrow(raw), ]
+  # arrancamos despues del header para no incluirlo como dato
+  datos <- raw[(config_hoja$header_row + 1):nrow(raw), ]
   names(datos) <- col_names
 
   datos <- datos %>%

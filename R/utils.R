@@ -28,7 +28,7 @@ PARAMETROS_RUBROS <- tibble::tribble(
   "Cercos",              "",                         50,        200,           "IPC",   "Cercos",
   "Edificios",           "210LA,220LA,392LA",        50,        200,           "IPC",   "Edificios",
   "Terrenos",            "110LA",                    NA,          0,           "IPC",   "Terrenos",
-  "Estructuras y canos", "",                         10,         40,           "IPC",   "Estructuras y caños",
+  "Estructuras y caños", "",                         10,         40,           "IPC",   "Estructuras y caños",
   "Eq de Oficina",       "320LA",                     3,         12,           "IPC",   "Eq de Oficina",
   "Maquinas y Equipos",  "310LA,350LA",              10,         40,           "IPC",   "Maquinas y Equipos",
   "Maquinas Mejoras",    "370LA",                    10,         40,           "IPC",   "Maquinas Mejoras",

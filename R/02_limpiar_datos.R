@@ -20,7 +20,8 @@ normalizar_hoja_categoria <- function(datos, rubro, anio_ejercicio) {
   idx_vu_asig <- grep("vu.*asignada", col_lower)[1]
   idx_vut_ly <- grep("vut.*ly|vut.*l.*y", col_lower)[1]
 
-  resultado <- tibble::tibble(rubro = rubro)
+  # inicializamos resultado con tantas filas como datos de entrada
+  resultado <- tibble::tibble(rubro = rep(rubro, nrow(datos)))
 
   resultado$tipo_movimiento <- detectar_tipo_movimiento(datos, rubro)
 
@@ -113,9 +114,8 @@ filtrar_ifrs16 <- function(datos) {
     )
 }
 
-limpiar_datos <- function(datos) {
+limpiar_datos <- function(datos, anio_ejercicio = 2022) {
   inventario_ly <- datos$inventario_ly
-  anio_ejercicio <- 2022
 
   inventario_limpio <- list()
 

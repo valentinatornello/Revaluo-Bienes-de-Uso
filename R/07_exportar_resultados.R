@@ -6,7 +6,7 @@ obtener_rutas_outputs <- function(outputs_dir = "outputs") {
   )
 }
 
-exportar_resultados <- function(datos_validados, outputs_dir = "outputs") {
+exportar_resultados <- function(datos_validados, outputs_dir = "outputs", anio_ejercicio = 2022) {
   rutas <- obtener_rutas_outputs(outputs_dir)
 
   for (dir_path in rutas) {
@@ -15,21 +15,20 @@ exportar_resultados <- function(datos_validados, outputs_dir = "outputs") {
 
   ruta_excel <- file.path(
     rutas$excel_final,
-    sprintf("MARG_Revaluo_AXI_%d.xlsx", 2022)
+    sprintf("MARG_Revaluo_AXI_%d.xlsx", anio_ejercicio)
   )
-  exportar_excel_revaluo(datos_validados, ruta_excel)
+  exportar_excel_revaluo(datos_validados, ruta_excel, anio_ejercicio)
 
   ruta_validaciones <- file.path(
     rutas$auditoria,
-    sprintf("validaciones_%d.xlsx", 2022)
+    sprintf("validaciones_%d.xlsx", anio_ejercicio)
   )
   exportar_validaciones(datos_validados, ruta_validaciones)
-
   ruta_resumen <- file.path(
     rutas$reportes,
-    sprintf("resumen_revaluo_%d.xlsx", 2022)
+    sprintf("resumen_revaluo_%d.xlsx", anio_ejercicio)
   )
-  exportar_resumen(datos_validados, ruta_resumen)
+  exportar_resumen(datos_validados, ruta_resumen, anio_ejercicio)
 
   list(
     rutas = rutas,
@@ -42,7 +41,7 @@ exportar_resultados <- function(datos_validados, outputs_dir = "outputs") {
   )
 }
 
-exportar_excel_revaluo <- function(datos, ruta) {
+exportar_excel_revaluo <- function(datos, ruta, anio_ejercicio = 2022) {
   wb <- openxlsx::createWorkbook()
   resultado_axi <- datos$resultado_axi
 
@@ -67,7 +66,7 @@ exportar_excel_revaluo <- function(datos, ruta) {
 
     encabezado <- tibble::tibble(
       info = c(
-        sprintf("MONSANTO ARGENTINA SRL - REVALUO IMPOSITIVO BIENES DE USO AL 31-12-%d", 2022),
+        sprintf("MONSANTO ARGENTINA SRL - REVALUO IMPOSITIVO BIENES DE USO AL 31-12-%d", anio_ejercicio),
         sprintf("Rubro: %s", rubro),
         ""
       )
@@ -191,7 +190,7 @@ exportar_validaciones <- function(datos, ruta) {
   message(sprintf("Validaciones exportadas: %s", ruta))
 }
 
-exportar_resumen <- function(datos, ruta) {
+exportar_resumen <- function(datos, ruta, anio_ejercicio = 2022) {
   wb <- openxlsx::createWorkbook()
 
   openxlsx::addWorksheet(wb, "Resumen")
@@ -199,7 +198,7 @@ exportar_resumen <- function(datos, ruta) {
   pg_axi <- datos$prueba_global$axi
   openxlsx::writeData(
     wb, "Resumen",
-    sprintf("MONSANTO ARGENTINA SRL - REVALUO AXI %d", 2022),
+    sprintf("MONSANTO ARGENTINA SRL - REVALUO AXI %d", anio_ejercicio),
     startRow = 1
   )
   openxlsx::writeData(wb, "Resumen", pg_axi, startRow = 3, colNames = TRUE)
@@ -219,4 +218,27 @@ exportar_resumen <- function(datos, ruta) {
 
   openxlsx::saveWorkbook(wb, ruta, overwrite = TRUE)
   message(sprintf("Resumen exportado: %s", ruta))
+}
+
+# exporta solo validaciones y auditoria cuando hay errores, sin generar el excel final
+exportar_solo_auditoria <- function(datos_validados, outputs_dir = "outputs", anio_ejercicio = 2022) {
+  rutas <- obtener_rutas_outputs(outputs_dir)
+
+  for (dir_path in rutas) {
+    if (!dir.exists(dir_path)) dir.create(dir_path, recursive = TRUE)
+  }
+
+  ruta_validaciones <- file.path(
+    rutas$auditoria,
+    sprintf("validaciones_%d.xlsx", anio_ejercicio)
+  )
+  exportar_validaciones(datos_validados, ruta_validaciones)
+
+  list(
+    rutas = rutas,
+    archivos = list(
+      validaciones = ruta_validaciones
+    ),
+    resultado = datos_validados
+  )
 }
