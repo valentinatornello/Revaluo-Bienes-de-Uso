@@ -12,6 +12,10 @@ list(
   tar_target(validacion, ejecutar_validaciones(prueba_global)),
   tar_target(
     resultados_exportados,
-    if (isTRUE(validacion$consistente)) exportar_resultados(validacion) else NULL
+    if (isTRUE(validacion$consistente)) {
+      exportar_resultados(validacion)
+    } else {
+      stop("Validación inconsistente: se cancela la exportación.", call. = FALSE)
+    }
   )
 )

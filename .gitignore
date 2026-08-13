@@ -8,7 +8,9 @@ data/**/*
 !data/**/.gitkeep
 inputs/**/*
 !inputs/**/.gitkeep
-outputs/**/*
-!outputs/excel_final/.gitkeep
+outputs/reportes/*
 !outputs/reportes/.gitkeep
+outputs/auditoria/*
 !outputs/auditoria/.gitkeep
+outputs/excel_final/*
+!outputs/excel_final/.gitkeep
