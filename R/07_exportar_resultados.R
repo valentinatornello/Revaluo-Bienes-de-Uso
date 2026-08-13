@@ -8,12 +8,12 @@ obtener_rutas_outputs <- function(outputs_dir = "outputs") {
 
 preparar_exportacion <- function(resultado, outputs_dir = "outputs") {
   # TODO: implementar exportación de resultados para revisión.
+  exportar_resultados(resultado, outputs_dir)
+}
+
+exportar_resultados <- function(resultado, outputs_dir = "outputs") {
   c(
     obtener_rutas_outputs(outputs_dir),
     list(resultado = resultado)
   )
-}
-
-exportar_resultados <- function(resultado, outputs_dir = "outputs") {
-  preparar_exportacion(resultado, outputs_dir)
 }
