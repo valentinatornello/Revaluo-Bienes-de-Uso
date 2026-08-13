@@ -1,0 +1,16 @@
+.Rhistory
+.RData
+.Rproj.user/
+renv/library/
+renv/staging/
+renv/python/
+data/**/*
+!data/**/.gitkeep
+inputs/**/*
+!inputs/**/.gitkeep
+outputs/reportes/*
+!outputs/reportes/.gitkeep
+outputs/auditoria/*
+!outputs/auditoria/.gitkeep
+outputs/excel_final/*
+!outputs/excel_final/.gitkeep
