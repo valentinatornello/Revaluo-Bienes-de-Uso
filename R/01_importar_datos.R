@@ -13,8 +13,8 @@ importar_datos <- function(inputs_dir = "inputs") {
   rutas <- obtener_rutas_inputs(inputs_dir)
   stop(
     sprintf(
-      "TODO: implementar importar_datos() para leer estas rutas: %s",
-      paste(names(rutas), collapse = ", ")
+      "importar_datos() no está implementada aún. Se esperan archivos en: %s",
+      paste(unlist(rutas), collapse = ", ")
     ),
     call. = FALSE
   )
