@@ -6,11 +6,13 @@ Proyecto para automatizar el cálculo del Revalúo de Bienes de Uso de Monsanto/
 
 El proceso actual depende de la consolidación manual de información proveniente de SAP y de archivos históricos de trabajo, lo que implica un alto riesgo de errores, baja trazabilidad y una fuerte dependencia del conocimiento operativo de personas específicas. La solución propuesta busca transformar este esquema en un proceso estandarizado, transparente y auditable.
 
+La iniciativa está orientada a automatizar las cuentas de 2025 en adelante. Como etapa de validación, se utilizarán datos de 2022, 2023 y 2024 para comprobar si el modelo reproduce el mismo resultado obtenido previamente por el equipo de KPMG. Este proyecto surge porque ese equipo pasará a cumplir el rol de auditor y ya no podrá continuar ejecutando esta tarea operativa.
+
 ## Objetivo
 
 ### Objetivo general
 
-Centralizar la información de SAP y de los archivos históricos para ejecutar el revalúo de bienes de uso de forma estandarizada, transparente y auditable.
+Centralizar la información de SAP y de los archivos históricos para ejecutar el revalúo de bienes de uso de forma estandarizada, transparente y auditable, con capacidad de sostener el proceso para las cuentas 2025 en adelante.
 
 ### Objetivos específicos
 
@@ -19,7 +21,9 @@ Centralizar la información de SAP y de los archivos históricos para ejecutar e
 - Reconstruir el inventario histórico de activos por rubro.
 - Aplicar los cálculos de ajuste por inflación y amortización según los criterios definidos.
 - Ejecutar validaciones automáticas que aseguren la consistencia de los resultados.
+- Validar el modelo contra los resultados históricos de 2022, 2023 y 2024 elaborados por KPMG.
 - Generar salidas aptas para revisión por los equipos de Impuestos y Contabilidad.
+- Replicar el output funcional esperado en Excel, con una presentación más limpia y ordenada.
 - Garantizar la trazabilidad completa de cada transformación y cálculo.
 
 ## Alcance
@@ -40,8 +44,9 @@ Centralizar la información de SAP y de los archivos históricos para ejecutar e
 3. **Integración de movimientos**: incorporación de altas, bajas y transferencias.
 4. **Reconstrucción del inventario**: actualización del stock de bienes de uso por rubro.
 5. **Cálculos**: amortizaciones, actualizaciones, ajuste por inflación y Prueba Global.
-6. **Validación**: controles automáticos de consistencia antes de emitir resultados.
-7. **Exportación**: generación de archivos de salida para revisión y cierre.
+6. **Validación histórica**: contraste de los resultados del modelo contra los ejercicios 2022, 2023 y 2024 preparados por KPMG.
+7. **Validación**: controles automáticos de consistencia antes de emitir resultados.
+8. **Exportación**: generación de archivos de salida para revisión y cierre.
 
 ## MARG – Reexp. de amortizaciones
 
@@ -85,9 +90,10 @@ En el archivo revalúo LY, rubro por rubro (class):
 - Inventario reconstruido de bienes de uso.
 - Detalle de movimientos integrados al período.
 - Cálculo del revalúo y del ajuste por inflación.
-- Resultados de la Prueba Global.
+- Prueba Global separada por `class` y consolidada total.
+- Amortizaciones globales y demás cuadros de control necesarios para revisión.
 - Validaciones de consistencia.
-- Archivos exportables para revisión funcional.
+- Archivo Excel final con el mismo output funcional que KPMG, en un formato más limpio y ordenado.
 
 ## Estructura del repositorio
 
@@ -142,7 +148,7 @@ revaluo-bienes-de-uso/
 
 ## Estado actual
 
-Fase inicial de diseño y modelado del flujo de automatización. Se encuentra en curso el relevamiento funcional del proceso, la identificación de reglas de negocio y la estructuración del pipeline técnico.
+Fase inicial de diseño y modelado del flujo de automatización. Se encuentra en curso el relevamiento funcional del proceso, la identificación de reglas de negocio, la estructuración del pipeline técnico y la definición de las validaciones necesarias para reproducir los resultados históricos de KPMG antes de operar sobre las cuentas 2025 en adelante.
 
 ## Equipo
 
