@@ -1,4 +1,5 @@
 ejecutar_validaciones <- function(resultado_pg) {
+  # TODO: implementar validaciones automáticas de consistencia.
   consistente <- if (is.null(resultado_pg)) {
     FALSE
   } else if (is.data.frame(resultado_pg)) {

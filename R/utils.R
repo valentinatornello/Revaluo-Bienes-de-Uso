@@ -1,4 +1,4 @@
-load_required_packages <- function(
+check_required_packages <- function(
   packages = c(
     "tidyverse",
     "readxl",
@@ -8,5 +8,17 @@ load_required_packages <- function(
     "targets"
   )
 ) {
-  invisible(lapply(packages, library, character.only = TRUE))
+  missing_packages <- packages[!vapply(packages, requireNamespace, quietly = TRUE, FUN.VALUE = logical(1))]
+
+  if (length(missing_packages) > 0) {
+    stop(
+      sprintf(
+        "Faltan paquetes requeridos: %s",
+        paste(missing_packages, collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+
+  invisible(TRUE)
 }
