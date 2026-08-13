@@ -10,8 +10,6 @@ obtener_rutas_inputs <- function(inputs_dir = "inputs") {
 
 importar_datos <- function(inputs_dir = "inputs") {
   # TODO: implementar lectura y consolidación de archivos de entrada.
-  list(
-    datos = NULL,
-    rutas_inputs = obtener_rutas_inputs(inputs_dir)
-  )
+  obtener_rutas_inputs(inputs_dir)
+  NULL
 }
