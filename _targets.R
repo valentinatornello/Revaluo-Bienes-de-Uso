@@ -8,7 +8,7 @@ list(
   tar_target(datos_limpios, limpiar_datos(datos_crudos)),
   tar_target(inventario, construir_rollforward(datos_limpios)),
   tar_target(axi, calcular_axi(inventario)),
-  tar_target(pg, generar_prueba_global(axi)),
-  tar_target(validacion, ejecutar_validaciones(pg)),
-  tar_target(export, exportar_resultados(validacion))
+  tar_target(prueba_global, generar_prueba_global(axi)),
+  tar_target(validacion, ejecutar_validaciones(prueba_global)),
+  tar_target(resultados_exportados, exportar_resultados(validacion))
 )
