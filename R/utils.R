@@ -41,21 +41,16 @@ PARAMETROS_RUBROS <- tibble::tribble(
 ANIO_CORTE_REVALUO <- 2018
 
 calcular_trimestres_primer_anio <- function(mes_alta) {
-  pmax(floor((12 - mes_alta + 1) / 3), 0)
+  4L - floor((mes_alta - 1L) / 3L)
 }
 
 calcular_vut_ly <- function(anio_alta, mes_alta, anio_ejercicio, vu_asignada) {
-  anios_completos <- anio_ejercicio - anio_alta - 1
   trim_primer_anio <- calcular_trimestres_primer_anio(mes_alta)
 
   vut <- ifelse(
     anio_alta == anio_ejercicio,
     0,
-    ifelse(
-      anio_alta == anio_ejercicio - 1,
-      trim_primer_anio,
-      trim_primer_anio + pmax(anios_completos - 1, 0) * 4 + 4
-    )
+    (anio_ejercicio - anio_alta - 1L) * 4L + trim_primer_anio
   )
   pmin(vut, vu_asignada)
 }

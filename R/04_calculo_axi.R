@@ -149,6 +149,19 @@ calcular_rubro_amortizable <- function(inv, indices_ipc, indices_ipim,
 
   inv <- calcular_bajas_reexp(inv, indices_ipc_bajas, indices_ipim_bajas)
 
+  inv <- inv %>%
+    dplyr::mutate(
+      vut_ejercicio = dplyr::if_else(tipo_movimiento == "baja", 0, vut_ejercicio),
+      vut_cierre = dplyr::if_else(tipo_movimiento == "baja", vut_ly, vut_cierre),
+      vu_restante = dplyr::if_else(tipo_movimiento == "baja", pmax(vu_asignada - vut_ly, 0), vu_restante),
+      amort_hist_ejercicio = dplyr::if_else(tipo_movimiento == "baja", 0, amort_hist_ejercicio),
+      amort_hist_2018 = dplyr::if_else(tipo_movimiento == "baja", 0, amort_hist_2018),
+      amort_acum_cierre = dplyr::if_else(tipo_movimiento == "baja", amort_acum_ly, amort_acum_cierre),
+      vr = dplyr::if_else(tipo_movimiento == "baja", vr_ly, vr),
+      amort_acum_cierre_reexp = dplyr::if_else(tipo_movimiento == "baja", amort_acum_ly_reexp, amort_acum_cierre_reexp),
+      vr_reexp = dplyr::if_else(tipo_movimiento == "baja", vo_reexp - amort_acum_ly_reexp, vr_reexp)
+    )
+
   inv
 }
 
@@ -156,6 +169,7 @@ calcular_terrenos <- function(inv, indices_ipc, indices_ipim, anio_ejercicio) {
   inv <- inv %>%
     dplyr::mutate(
       vo = tidyr::replace_na(vo, 0),
+      anio_alta = tidyr::replace_na(anio_alta, anio_ejercicio),
       vu_asignada = 0,
       amort_trimestre = 0,
       amort_hist_ejercicio = 0,
@@ -175,7 +189,6 @@ calcular_terrenos <- function(inv, indices_ipc, indices_ipim, anio_ejercicio) {
       coef_ipc = buscar_coeficiente(fecha_alta, indices_ipc),
       coef_ipim = buscar_coeficiente(fecha_alta, indices_ipim),
 
-      # para terrenos pre-2018 usamos IPIM, post-2018 usamos IPC
       vo_reexp = dplyr::if_else(
         anio_alta >= ANIO_CORTE_REVALUO,
         vo * coef_ipc,

@@ -11,7 +11,7 @@ normalizar_hoja_categoria <- function(datos, rubro, anio_ejercicio) {
   col_lower <- tolower(names(datos))
 
   idx_nro <- grep("activo.?fijo|n.*activo", col_lower)[1]
-  idx_desc <- grep("descripici?on|denominaci", col_lower)[1]
+  idx_desc <- grep("descrip|denominaci", col_lower)[1]
   idx_fecha_archivo <- grep("a.*o.*archivo|a.*o.*cia|fe.*capit", col_lower)[1]
   idx_fecha_tomar <- grep("a.*o.*tomar", col_lower)[1]
   idx_anio_alta <- grep("^a.*o.*alta$", col_lower)[1]
@@ -20,10 +20,11 @@ normalizar_hoja_categoria <- function(datos, rubro, anio_ejercicio) {
   idx_vu_asig <- grep("vu.*asignada", col_lower)[1]
   idx_vut_ly <- grep("vut.*ly|vut.*l.*y", col_lower)[1]
 
-  # inicializamos resultado con tantas filas como datos de entrada
-  resultado <- tibble::tibble(rubro = rep(rubro, nrow(datos)))
+  n <- nrow(datos)
+  resultado <- tibble::tibble(rubro = rep(rubro, n))
 
   resultado$tipo_movimiento <- detectar_tipo_movimiento(datos, rubro)
+  resultado$anio_movimiento <- extraer_anio_movimiento(datos)
 
   resultado$nro_activo_fijo <- if (!is.na(idx_nro)) {
     as.character(datos[[idx_nro]])
@@ -80,13 +81,23 @@ normalizar_hoja_categoria <- function(datos, rubro, anio_ejercicio) {
 }
 
 detectar_tipo_movimiento <- function(datos, rubro) {
-  primera_col <- as.character(datos[[1]])
+  primera_col <- tolower(as.character(datos[[1]]))
   dplyr::case_when(
-    grepl("^Altas", primera_col, ignore.case = TRUE)           ~ "alta",
-    grepl("^Transferencias", primera_col, ignore.case = TRUE)  ~ "transferencia",
-    grepl("^Bajas", primera_col, ignore.case = TRUE)           ~ "baja",
-    TRUE                                                       ~ "historico"
+    grepl("^totales", primera_col)                                 ~ "totales",
+    grepl("^altas? y baja", primera_col)                           ~ "alta_y_baja",
+    grepl("^altas?\\b", primera_col)                               ~ "alta",
+    grepl("^transferencias?\\b", primera_col)                      ~ "transferencia",
+    grepl("^bajas?\\b", primera_col)                               ~ "baja",
+    grepl("^(ojo|ver|solo|destinado)", primera_col)                ~ "nota",
+    !is.na(primera_col) & grepl("^[0-9.]+$", primera_col)         ~ "nota",
+    TRUE                                                           ~ "historico"
   )
+}
+
+extraer_anio_movimiento <- function(datos) {
+  primera_col <- as.character(datos[[1]])
+  anio_str <- stringr::str_extract(primera_col, "\\d{4}")
+  as.integer(anio_str)
 }
 
 parsear_fecha_alta <- function(fecha_raw) {
@@ -125,7 +136,11 @@ limpiar_datos <- function(datos, anio_ejercicio = 2022) {
 
     limpio <- normalizar_hoja_categoria(raw, rubro_nombre, anio_ejercicio)
     limpio <- filtrar_ifrs16(limpio)
-    limpio <- limpio %>% dplyr::filter(!is.na(vo) | !is.na(nro_activo_fijo))
+    limpio <- limpio %>%
+      dplyr::filter(
+        !tipo_movimiento %in% c("totales", "nota"),
+        !is.na(vo) | !is.na(nro_activo_fijo)
+      )
 
     inventario_limpio[[rubro_nombre]] <- limpio
   }

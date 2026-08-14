@@ -16,38 +16,50 @@ generar_prueba_global <- function(datos_axi) {
 
 generar_pg_amortizaciones <- function(resultado_axi) {
   rubros <- names(resultado_axi)
+  anio_ejercicio <- 2022
 
   pg <- tibble::tibble(rubro = rubros)
 
+  es_mov_actual <- function(d) {
+    !is.na(d$anio_movimiento) & d$anio_movimiento == anio_ejercicio
+  }
+  es_existente <- function(d) {
+    !es_mov_actual(d) & d$tipo_movimiento != "baja"
+  }
+
   pg$amort_inicio <- vapply(rubros, function(r) {
     d <- resultado_axi[[r]]
-    sum(d$amort_acum_ly[d$tipo_movimiento == "historico"], na.rm = TRUE)
+    idx <- es_existente(d) | (es_mov_actual(d) & d$tipo_movimiento == "baja")
+    sum(d$amort_acum_ly[idx], na.rm = TRUE)
   }, numeric(1))
 
   pg$amort_altas <- vapply(rubros, function(r) {
     d <- resultado_axi[[r]]
-    sum(d$amort_hist_ejercicio[d$tipo_movimiento == "alta"], na.rm = TRUE)
+    idx <- es_mov_actual(d) & d$tipo_movimiento == "alta"
+    sum(d$amort_acum_cierre[idx], na.rm = TRUE)
   }, numeric(1))
 
   pg$amort_transferencias <- vapply(rubros, function(r) {
     d <- resultado_axi[[r]]
-    sum(d$amort_hist_ejercicio[d$tipo_movimiento == "transferencia"], na.rm = TRUE)
+    idx <- es_mov_actual(d) & d$tipo_movimiento == "transferencia"
+    sum(d$amort_acum_cierre[idx], na.rm = TRUE)
   }, numeric(1))
 
   pg$amort_bajas <- vapply(rubros, function(r) {
     d <- resultado_axi[[r]]
-    -sum(d$amort_bajas[d$tipo_movimiento == "baja"], na.rm = TRUE)
+    idx <- es_mov_actual(d) & d$tipo_movimiento == "baja"
+    -sum(d$amort_acum_ly[idx], na.rm = TRUE)
   }, numeric(1))
 
   pg$bs_agotaron_vu_ly <- vapply(rubros, function(r) {
     d <- resultado_axi[[r]]
-    sum(d$amort_bs_agotaron_vu_ly, na.rm = TRUE)
+    sum(d$amort_bs_agotaron_vu_ly[es_existente(d)], na.rm = TRUE)
   }, numeric(1))
 
   pg$amort_hist_ejercicio_total <- vapply(rubros, function(r) {
     d <- resultado_axi[[r]]
-    historicos <- d %>% dplyr::filter(tipo_movimiento == "historico", !es_vu_agotada_ly)
-    sum(historicos$amort_hist_ejercicio, na.rm = TRUE)
+    idx <- es_existente(d) & !d$es_vu_agotada_ly
+    sum(d$amort_hist_ejercicio[idx], na.rm = TRUE)
   }, numeric(1))
 
   pg$amort_prueba <- pg$amort_inicio +
@@ -59,7 +71,8 @@ generar_pg_amortizaciones <- function(resultado_axi) {
 
   pg$amort_revaluo <- vapply(rubros, function(r) {
     d <- resultado_axi[[r]]
-    sum(d$amort_acum_cierre, na.rm = TRUE)
+    idx <- !(es_mov_actual(d) & d$tipo_movimiento == "baja")
+    sum(d$amort_acum_cierre[idx], na.rm = TRUE)
   }, numeric(1))
 
   pg$diferencia <- pg$amort_prueba - pg$amort_revaluo
@@ -69,44 +82,57 @@ generar_pg_amortizaciones <- function(resultado_axi) {
 
 generar_pg_valor_residual <- function(resultado_axi) {
   rubros <- names(resultado_axi)
+  anio_ejercicio <- 2022
 
   pg <- tibble::tibble(rubro = rubros)
 
+  es_mov_actual <- function(d) {
+    !is.na(d$anio_movimiento) & d$anio_movimiento == anio_ejercicio
+  }
+  es_existente <- function(d) {
+    !es_mov_actual(d) & d$tipo_movimiento != "baja"
+  }
+
   pg$vr_inicio <- vapply(rubros, function(r) {
     d <- resultado_axi[[r]]
-    historicos <- d %>% dplyr::filter(tipo_movimiento == "historico")
-    sum(historicos$vr_ly, na.rm = TRUE)
+    idx <- es_existente(d) | (es_mov_actual(d) & d$tipo_movimiento == "baja")
+    sum(d$vr_ly[idx], na.rm = TRUE)
   }, numeric(1))
 
-  pg$altas_vo <- vapply(rubros, function(r) {
+  pg$altas_vr <- vapply(rubros, function(r) {
     d <- resultado_axi[[r]]
-    sum(d$vo[d$tipo_movimiento == "alta"], na.rm = TRUE)
+    idx <- es_mov_actual(d) & d$tipo_movimiento == "alta"
+    sum(d$vr[idx], na.rm = TRUE)
   }, numeric(1))
 
-  pg$transferencias_vo <- vapply(rubros, function(r) {
+  pg$transferencias_vr <- vapply(rubros, function(r) {
     d <- resultado_axi[[r]]
-    sum(d$vo[d$tipo_movimiento == "transferencia"], na.rm = TRUE)
+    idx <- es_mov_actual(d) & d$tipo_movimiento == "transferencia"
+    sum(d$vr[idx], na.rm = TRUE)
   }, numeric(1))
 
   pg$bajas_vo <- vapply(rubros, function(r) {
     d <- resultado_axi[[r]]
-    -sum(abs(d$vo[d$tipo_movimiento == "baja"]), na.rm = TRUE)
+    idx <- es_mov_actual(d) & d$tipo_movimiento == "baja"
+    -sum(d$vr_ly[idx], na.rm = TRUE)
   }, numeric(1))
 
   pg$amort_ejercicio <- vapply(rubros, function(r) {
     d <- resultado_axi[[r]]
-    -sum(d$amort_hist_ejercicio, na.rm = TRUE)
+    idx <- es_existente(d) & !d$es_vu_agotada_ly
+    -sum(d$amort_hist_ejercicio[idx], na.rm = TRUE)
   }, numeric(1))
 
   pg$vr_prueba <- pg$vr_inicio +
-    pg$altas_vo +
-    pg$transferencias_vo +
+    pg$altas_vr +
+    pg$transferencias_vr +
     pg$bajas_vo +
     pg$amort_ejercicio
 
   pg$vr_revaluo <- vapply(rubros, function(r) {
     d <- resultado_axi[[r]]
-    sum(d$vr, na.rm = TRUE)
+    idx <- !(es_mov_actual(d) & d$tipo_movimiento == "baja")
+    sum(d$vr[idx], na.rm = TRUE)
   }, numeric(1))
 
   pg$diferencia <- pg$vr_prueba - pg$vr_revaluo

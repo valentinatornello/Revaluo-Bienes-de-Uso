@@ -1,5 +1,9 @@
 # Reglas de negocio
 
+## Contexto
+
+El cálculo del Revalúo de Bienes de Uso es una obligación impositiva argentina que se ejecuta año a año. Hasta ahora lo realizaba KPMG; al pasar a ser auditor, el equipo interno asume el cálculo. Se valida contra los ejercicios 2022, 2023 y 2024 (resultados KPMG) para producción a partir de 2025.
+
 ## Reglas generales
 
 1. Si el bien se adquirió antes de 2018, NO se revalúan con IPC las amortizaciones ni VO (quedan a valores históricos). Se usa IPIM para la confiscatoriedad.
@@ -30,7 +34,9 @@
 - Altas, Bajas y Transferencias del ejercicio: extraídos de SAP
 - Inventario histórico: archivo de revalúo del año anterior
 - Índices de actualización: tablas IPC e IPIM incluidas en el Excel de revalúo
-- Posting date se usa como fecha de alta para el cálculo
+- Altas: se usa Posting Date (PSTNG date) como fecha de alta
+- Transferencias: se usa Cap Date (fecha de capitalización) como fecha de alta
+- Bajas: valores congelados a LY (se pegan como valores para mantener los datos a inicio del ejercicio)
 
 ## Validaciones requeridas
 

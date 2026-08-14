@@ -2,15 +2,38 @@
 
 ## Descripción
 
-Proyecto para automatizar el cálculo del Revalúo de Bienes de Uso de Monsanto/Bayer Argentina, reemplazando las tareas manuales realizadas sobre múltiples archivos Excel por un flujo reproducible desarrollado en R.
+Proyecto para automatizar el cálculo del Revalúo de Bienes de Uso (Ajuste por Inflación Impositivo) de Monsanto/Bayer Argentina, reemplazando el proceso manual que realizaba el equipo de KPMG.
 
-El proceso actual depende de la consolidación manual de información proveniente de SAP y de archivos históricos de trabajo, lo que implica un alto riesgo de errores, baja trazabilidad y una fuerte dependencia del conocimiento operativo de personas específicas. La solución propuesta busca transformar este esquema en un proceso estandarizado, transparente y auditable.
+**Contexto**: KPMG realizaba este cálculo anualmente sobre archivos Excel con ~56.000 activos distribuidos en 11 categorías. Al pasar KPMG a ser auditor de la compañía, ya no puede ejecutar esta tarea por conflicto de interés. Este proyecto internaliza el proceso con un flujo automatizado en R que produce el mismo output pero con mayor trazabilidad y menor riesgo de error.
 
 ## Objetivo
 
 ### Objetivo general
 
-Centralizar la información de SAP y de los archivos históricos para ejecutar el revalúo de bienes de uso de forma estandarizada, transparente y auditable.
+Automatizar el cálculo del revalúo de bienes de uso para ejecutarlo de forma interna a partir del ejercicio 2025, produciendo un output equivalente al de KPMG pero más limpio y estructurado.
+
+### Estrategia de validación
+
+El modelo se valida contra los resultados históricos de KPMG para tres ejercicios consecutivos:
+
+| Ejercicio | Archivo KPMG | Estado |
+|---|---|---|
+| 2022 | `MARG - Revaluo AxI 2022_v_28.04.23 IPIM e IPC.xlsx` | En validación |
+| 2023 | Pendiente | Pendiente |
+| 2024 | Pendiente | Pendiente |
+
+Una vez que el modelo reproduzca los resultados de los tres ejercicios, se considerará validado para producción (2025+).
+
+### Output deseado
+
+El output final es un archivo Excel con la siguiente estructura:
+
+- **Detalle por categoría (Class)**: una hoja por rubro con el cálculo activo por activo
+- **Prueba Global por Class**: reconciliación individual por cada categoría
+- **Prueba Global Total**: consolidación de todas las categorías
+- **Amortizaciones globales**: resumen de amortización histórica y reexpresada
+- **Hojas de índices**: tablas IPC e IPIM utilizadas en el cálculo
+- **Resumen ejecutivo**: resultado del AXI por categoría
 
 ### Objetivos específicos
 
@@ -125,4 +148,14 @@ revaluo-bienes-de-uso/
 
 ## Estado actual
 
-Fase inicial de diseño y modelado del flujo de automatización. Se encuentra en curso el relevamiento funcional del proceso, la identificación de reglas de negocio y la estructuración del pipeline técnico.
+Pipeline funcional ejecutando los 7 pasos del cálculo end-to-end con datos reales del ejercicio 2022:
+
+- **Importación**: lee las 11 hojas del Excel de KPMG + archivo SAP (Altas, Bajas, Transferencias)
+- **Limpieza**: normaliza ~65.000 filas, filtra IFRS16 y filas de control
+- **Rollforward**: integra movimientos del ejercicio con detección de duplicados
+- **Cálculo AXI**: amortización histórica + reexpresión IPC/IPIM por activo
+- **Prueba Global**: reconciliación por categoría (4/10 rubros con diferencia = 0)
+- **Validaciones**: consistencia interna perfecta (VR = VO - Amort Acum)
+- **Exportación**: genera 3 archivos Excel (resultado, validaciones, resumen)
+
+Próximos pasos: ajustar edge cases de la PG para las categorías restantes, validar contra ejercicios 2023 y 2024.

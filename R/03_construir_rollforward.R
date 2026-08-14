@@ -2,13 +2,17 @@
 
 construir_rollforward <- function(datos_limpios, anio_ejercicio = 2022) {
   inventario <- datos_limpios$inventario_ly
-  altas <- datos_limpios$altas
-  bajas <- datos_limpios$bajas
-  transferencias <- datos_limpios$transferencias
+  altas_sap <- datos_limpios$altas
+  bajas_sap <- datos_limpios$bajas
+  transf_sap <- datos_limpios$transferencias
+  anio_ejercicio <- 2022
+
+  tiene_mov_anio <- any(purrr::map_lgl(inventario, function(inv) {
+    any(!is.na(inv$anio_movimiento) & inv$anio_movimiento == anio_ejercicio)
+  }))
 
   resultado <- list()
 
-  # armamos el set de categorias desde los rubros configurados Y el inventario historico
   rubros_config <- PARAMETROS_RUBROS$rubro
   rubros_inventario <- names(inventario)
   todos_rubros <- unique(c(rubros_config, rubros_inventario))
@@ -16,72 +20,76 @@ construir_rollforward <- function(datos_limpios, anio_ejercicio = 2022) {
   for (rubro_nombre in todos_rubros) {
     inv_rubro <- inventario[[rubro_nombre]]
 
-    # si no hay inventario previo para este rubro, inicializamos uno vacio
-    if (is.null(inv_rubro) || nrow(inv_rubro) == 0) {
-      inv_rubro <- tibble::tibble(
-        rubro = character(),
-        tipo_movimiento = character(),
-        nro_activo_fijo = character(),
-        descripcion = character(),
-        fecha_alta = as.Date(character()),
-        anio_alta = integer(),
-        mes_alta = integer(),
-        vo = numeric(),
-        vu_asignada = numeric(),
-        vut_ly = numeric(),
-        origen = character()
-      )
-    } else {
-      # normalizamos las filas del año anterior: las que eran movimientos previos
-      # pasan a ser historicos para el ejercicio actual
-      inv_rubro <- inv_rubro %>%
-        dplyr::mutate(
-          origen = dplyr::case_when(
-            tipo_movimiento == "alta"           ~ paste0("alta_", anio_alta),
-            tipo_movimiento == "transferencia"  ~ paste0("transferencia_", anio_alta),
-            tipo_movimiento == "baja"           ~ paste0("baja_", anio_alta),
-            TRUE                                ~ "historico"
-          ),
-          # las altas, transferencias y bajas de ejercicios anteriores ya son historico
-          tipo_movimiento = dplyr::if_else(
-            tipo_movimiento %in% c("alta", "transferencia") & anio_alta < anio_ejercicio,
-            "historico",
-            tipo_movimiento
-          )
-        ) %>%
-        # sacamos las bajas de ejercicios previos porque ya estan dadas de baja
-        dplyr::filter(!(tipo_movimiento == "baja" & anio_alta < anio_ejercicio))
-    }
+    inv_rubro <- inv_rubro %>%
+      dplyr::mutate(origen = dplyr::case_when(
+        tipo_movimiento == "alta"          ~ paste0("alta_", dplyr::coalesce(as.integer(anio_movimiento), anio_alta)),
+        tipo_movimiento == "transferencia" ~ paste0("transferencia_", dplyr::coalesce(as.integer(anio_movimiento), anio_alta)),
+        tipo_movimiento == "baja"          ~ paste0("baja_", dplyr::coalesce(as.integer(anio_movimiento), anio_alta)),
+        tipo_movimiento == "alta_y_baja"   ~ paste0("alta_y_baja_", dplyr::coalesce(as.integer(anio_movimiento), anio_alta)),
+        TRUE                               ~ "historico"
+      ))
 
-    # agregamos altas SAP del ejercicio actual
-    if (nrow(altas) > 0) {
-      altas_rubro <- filtrar_movimientos_por_rubro(altas, rubro_nombre)
-      if (nrow(altas_rubro) > 0) {
-        altas_norm <- normalizar_movimiento_sap(altas_rubro, rubro_nombre, "alta", anio_ejercicio)
-        inv_rubro <- dplyr::bind_rows(inv_rubro, altas_norm)
+    if (!tiene_mov_anio) {
+      if (nrow(altas_sap) > 0) {
+        altas_rubro <- altas_sap %>% dplyr::filter(rubro == rubro_nombre)
+        if (nrow(altas_rubro) > 0) {
+          altas_norm <- normalizar_movimiento_sap(altas_rubro, rubro_nombre, "alta", anio_ejercicio)
+          inv_rubro <- dplyr::bind_rows(inv_rubro, altas_norm)
+        }
+      }
+
+      if (nrow(transf_sap) > 0) {
+        transf_rubro <- transf_sap %>% dplyr::filter(rubro == rubro_nombre)
+        if (nrow(transf_rubro) > 0) {
+          transf_norm <- normalizar_movimiento_sap(transf_rubro, rubro_nombre, "transferencia", anio_ejercicio)
+          inv_rubro <- dplyr::bind_rows(inv_rubro, transf_norm)
+        }
+      }
+
+      if (nrow(bajas_sap) > 0) {
+        bajas_rubro <- bajas_sap %>% dplyr::filter(rubro == rubro_nombre)
+        if (nrow(bajas_rubro) > 0) {
+          bajas_norm <- normalizar_baja_sap(bajas_rubro, rubro_nombre, anio_ejercicio)
+          inv_rubro <- dplyr::bind_rows(inv_rubro, bajas_norm)
+        }
       }
     }
 
-    # agregamos transferencias SAP del ejercicio
-    if (nrow(transferencias) > 0) {
-      transf_rubro <- filtrar_movimientos_por_rubro(transferencias, rubro_nombre)
-      if (nrow(transf_rubro) > 0) {
-        transf_norm <- normalizar_movimiento_sap(transf_rubro, rubro_nombre, "transferencia", anio_ejercicio)
-        inv_rubro <- dplyr::bind_rows(inv_rubro, transf_norm)
-      }
-    }
-
-    # aplicamos bajas del ejercicio
-    if (nrow(bajas) > 0) {
-      bajas_rubro <- filtrar_movimientos_por_rubro(bajas, rubro_nombre)
-      if (nrow(bajas_rubro) > 0) {
-        inv_rubro <- aplicar_bajas(inv_rubro, bajas_rubro)
-      }
-    }
-
-    # solo guardamos si quedo algo
     if (nrow(inv_rubro) > 0) {
       resultado[[rubro_nombre]] <- inv_rubro
+    }
+  }
+
+  if (!tiene_mov_anio) {
+    rubros_nuevos <- unique(c(
+      altas_sap$rubro, transf_sap$rubro, bajas_sap$rubro
+    ))
+    rubros_nuevos <- rubros_nuevos[!is.na(rubros_nuevos)]
+    rubros_sin_inventario <- setdiff(rubros_nuevos, names(resultado))
+
+    for (rubro_nombre in rubros_sin_inventario) {
+      partes <- list()
+      altas_r <- altas_sap %>% dplyr::filter(rubro == rubro_nombre)
+      if (nrow(altas_r) > 0) {
+        partes <- append(partes, list(
+          normalizar_movimiento_sap(altas_r, rubro_nombre, "alta", anio_ejercicio)
+        ))
+      }
+      transf_r <- transf_sap %>% dplyr::filter(rubro == rubro_nombre)
+      if (nrow(transf_r) > 0) {
+        partes <- append(partes, list(
+          normalizar_movimiento_sap(transf_r, rubro_nombre, "transferencia", anio_ejercicio)
+        ))
+      }
+      bajas_r <- bajas_sap %>% dplyr::filter(rubro == rubro_nombre)
+      if (nrow(bajas_r) > 0) {
+        partes <- append(partes, list(
+          normalizar_baja_sap(bajas_r, rubro_nombre, anio_ejercicio)
+        ))
+      }
+      if (length(partes) > 0) {
+        resultado[[rubro_nombre]] <- dplyr::bind_rows(partes)
+      }
     }
   }
 
@@ -89,59 +97,40 @@ construir_rollforward <- function(datos_limpios, anio_ejercicio = 2022) {
   datos_limpios
 }
 
-filtrar_movimientos_por_rubro <- function(movimientos, rubro_nombre) {
-  params <- PARAMETROS_RUBROS %>%
-    dplyr::filter(rubro == rubro_nombre)
-
-  # si no hay parametros o no tiene codigos SAP, no podemos filtrar
-  if (nrow(params) == 0 || is.na(params$codigos_sap) || params$codigos_sap == "") {
-    return(tibble::tibble())
-  }
-
-  codigos <- trimws(unlist(strsplit(params$codigos_sap, ",")))
-
-  col_clase <- grep("class|clase|codigo|asset_class", tolower(names(movimientos)), value = TRUE)
-  if (length(col_clase) == 0) return(tibble::tibble())
-
-  movimientos %>%
-    dplyr::filter(.data[[col_clase[1]]] %in% codigos)
-}
-
-normalizar_movimiento_sap <- function(movimiento, rubro_nombre, tipo, anio_ejercicio = 2022) {
+normalizar_movimiento_sap <- function(mov, rubro_nombre, tipo, anio_ejercicio) {
   vu_trim <- obtener_vu_trimestres(rubro_nombre)
 
-  col_nro <- grep("asset|activo|numero", tolower(names(movimiento)), value = TRUE)[1]
-  col_desc <- grep("desc|text|nombre", tolower(names(movimiento)), value = TRUE)[1]
-  col_fecha <- grep("posting|fecha|capitali", tolower(names(movimiento)), value = TRUE)[1]
-  col_valor <- grep("acqui|valor|amount|importe", tolower(names(movimiento)), value = TRUE)[1]
+  fecha_ref <- if (tipo == "transferencia") mov$cap_date_parsed else mov$posting_date
 
   tibble::tibble(
     rubro = rubro_nombre,
     tipo_movimiento = tipo,
-    nro_activo_fijo = if (!is.na(col_nro)) as.character(movimiento[[col_nro]]) else NA_character_,
-    descripcion = if (!is.na(col_desc)) as.character(movimiento[[col_desc]]) else NA_character_,
-    fecha_alta = if (!is.na(col_fecha)) as.Date(movimiento[[col_fecha]]) else as.Date(NA),
-    anio_alta = lubridate::year(fecha_alta),
-    mes_alta = lubridate::month(fecha_alta),
-    vo = if (!is.na(col_valor)) as.numeric(movimiento[[col_valor]]) else NA_real_,
+    nro_activo_fijo = as.character(mov$nro_activo),
+    descripcion = as.character(mov$descripcion),
+    fecha_alta = fecha_ref,
+    anio_alta = lubridate::year(fecha_ref),
+    mes_alta = lubridate::month(fecha_ref),
+    vo = mov$valor,
     vu_asignada = vu_trim,
-    vut_ly = 0,
+    vut_ly = NA_real_,
     origen = paste0(tipo, "_", anio_ejercicio)
   )
 }
 
-aplicar_bajas <- function(inventario, bajas) {
-  col_nro_baja <- grep("asset|activo|numero", tolower(names(bajas)), value = TRUE)[1]
+normalizar_baja_sap <- function(bajas, rubro_nombre, anio_ejercicio) {
+  vu_trim <- obtener_vu_trimestres(rubro_nombre)
 
-  if (is.na(col_nro_baja)) return(inventario)
-
-  nros_baja <- as.character(bajas[[col_nro_baja]])
-
-  # marcamos como baja tanto historicos como altas/transferencias del mismo ejercicio
-  inventario %>%
-    dplyr::mutate(
-      es_baja = nro_activo_fijo %in% nros_baja,
-      tipo_movimiento = dplyr::if_else(es_baja, "baja", tipo_movimiento)
-    ) %>%
-    dplyr::select(-es_baja)
+  tibble::tibble(
+    rubro = rubro_nombre,
+    tipo_movimiento = "baja",
+    nro_activo_fijo = as.character(bajas$nro_activo),
+    descripcion = as.character(bajas$descripcion),
+    fecha_alta = bajas$posting_date,
+    anio_alta = lubridate::year(bajas$cap_date_parsed),
+    mes_alta = lubridate::month(bajas$cap_date_parsed),
+    vo = bajas$valor,
+    vu_asignada = vu_trim,
+    vut_ly = NA_real_,
+    origen = paste0("baja_", anio_ejercicio)
+  )
 }
