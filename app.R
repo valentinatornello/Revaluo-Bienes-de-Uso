@@ -18,7 +18,7 @@ source("R/05_prueba_global.R")
 source("R/06_validaciones.R")
 source("R/07_exportar_resultados.R")
 
-ANIO_EJERCICIO_DEFAULT <- 2022
+ANIO_EJERCICIO_DEFAULT <- as.integer(format(Sys.Date(), "%Y")) - 1L
 
 # ─────────────────────────────────────────────
 #  Helpers
@@ -180,7 +180,7 @@ server <- function(input, output, session) {
     req(input$archivo_sap)
     dest_dir <- file.path("inputs", "SAP")
     if (!dir.exists(dest_dir)) dir.create(dest_dir, recursive = TRUE)
-    dest_path <- file.path(dest_dir, input$archivo_sap$name)
+    dest_path <- file.path(dest_dir, basename(input$archivo_sap$name))
     file.copy(input$archivo_sap$datapath, dest_path, overwrite = TRUE)
     output$sap_status <- renderUI({
       tags$p(style = "color:green; font-size:.85rem;",
@@ -205,7 +205,7 @@ server <- function(input, output, session) {
 
     # Guardar LY en parametros para que las funciones lo encuentren
     dir.create(file.path("inputs", "parametros"), recursive = TRUE, showWarnings = FALSE)
-    path_ly_dest <- file.path("inputs", "parametros", input$archivo_ly$name)
+    path_ly_dest <- file.path("inputs", "parametros", basename(input$archivo_ly$name))
     file.copy(path_ly, path_ly_dest, overwrite = TRUE)
 
     # ── Paso 1: importar ────────────────────
@@ -368,12 +368,12 @@ server <- function(input, output, session) {
 
     rows <- lapply(names(inv), function(r) {
       d <- inv[[r]]
-      orígenes <- if (!is.null(d$origen)) paste(sort(unique(d$origen)), collapse = ", ") else "—"
+      origenes <- if (!is.null(d$origen)) paste(sort(unique(d$origen)), collapse = ", ") else "—"
       vo_total <- if ("vo" %in% names(d)) sum(d$vo, na.rm = TRUE) else NA
       tags$tr(
         tags$td(r),
         tags$td(nrow(d)),
-        tags$td(orígenes),
+        tags$td(origenes),
         tags$td(fmt_num(vo_total))
       )
     })
@@ -397,7 +397,7 @@ server <- function(input, output, session) {
       amort_reexp <- if ("amort_acum_cierre_reexp" %in% names(d)) fmt_num(sum(d$amort_acum_cierre_reexp, na.rm = TRUE)) else "—"
       vr_reexp   <- if ("vr_reexp" %in% names(d)) fmt_num(sum(d$vr_reexp, na.rm = TRUE)) else "—"
       vr_hist    <- if ("vr" %in% names(d)) fmt_num(sum(d$vr, na.rm = TRUE)) else "—"
-      axi        <- if (all(c("vr_reexp","vr") %in% names(d)))
+      axi_val    <- if (all(c("vr_reexp","vr") %in% names(d)))
                       fmt_num(sum(d$vr_reexp, na.rm = TRUE) - sum(d$vr, na.rm = TRUE))
                     else "—"
       tags$tr(
@@ -406,7 +406,7 @@ server <- function(input, output, session) {
         tags$td(amort_reexp),
         tags$td(vr_reexp),
         tags$td(vr_hist),
-        tags$td(axi)
+        tags$td(axi_val)
       )
     })
 
@@ -427,7 +427,6 @@ server <- function(input, output, session) {
 
     render_pg_table <- function(df, titulo) {
       if (is.null(df) || nrow(df) == 0) return(NULL)
-      n_col <- ncol(df)
       col_names <- names(df)
 
       rows_data <- lapply(seq_len(nrow(df)), function(i) {
