@@ -7,6 +7,9 @@ library(openxlsx)
 library(janitor)
 library(lubridate)
 
+# Permitir archivos grandes (hasta 200 MB)
+options(shiny.maxRequestSize = 200 * 1024^2)
+
 # Cargar todas las funciones del proyecto
 source("R/utils.R")
 source("R/01_importar_datos.R")
@@ -68,6 +71,16 @@ ui <- fluidPage(
                  padding:10px 24px; font-size:1rem; cursor:pointer; width:100%; margin-top:8px; }
       .run-btn:hover { background:#1a5eb8; }
       .section-header { font-size:1.2rem; font-weight:700; color:#2c7be5; margin: 12px 0 6px 0; }
+      .info-btn { background:none; border:1px solid #2c7be5; color:#2c7be5; border-radius:50%;
+                  width:22px; height:22px; font-size:.75rem; cursor:pointer; padding:0;
+                  line-height:1; vertical-align:middle; margin-left:4px; }
+      .info-btn:hover { background:#2c7be5; color:#fff; }
+      .schema-table { border-collapse:collapse; width:100%; font-size:.82rem; margin-top:6px; }
+      .schema-table th { background:#2c7be5; color:#fff; padding:5px 10px; text-align:left; }
+      .schema-table td { border-bottom:1px solid #e0e0e0; padding:4px 10px; }
+      .schema-table tr:last-child td { border-bottom:none; }
+      .tab-note { background:#fff8e1; border-left:3px solid #f9a825; padding:6px 10px;
+                  border-radius:4px; font-size:.82rem; margin-bottom:8px; }
     "))
   ),
 
@@ -83,7 +96,12 @@ ui <- fluidPage(
                      min = 2000, max = 2100, step = 1),
 
         hr(),
-        div(class = "section-header", "📂 Archivo de parámetros (Excel LY)"),
+        div(class = "section-header",
+          "📂 Archivo de parámetros (Excel LY)",
+          tags$button(class = "info-btn", id = "btn_info_ly",
+                      onclick = "Shiny.setInputValue('show_info_ly', Math.random())",
+                      "ℹ")
+        ),
         fileInput("archivo_ly", NULL,
                   accept = ".xlsx",
                   buttonLabel = "Seleccionar…",
@@ -91,7 +109,12 @@ ui <- fluidPage(
         helpText("Debe contener las hojas de categorías e índices IPC / IPIM."),
 
         hr(),
-        div(class = "section-header", "📥 Cargar Altas / Bajas / Transferencias SAP"),
+        div(class = "section-header",
+          "📥 Cargar Altas / Bajas / Transferencias SAP",
+          tags$button(class = "info-btn", id = "btn_info_sap",
+                      onclick = "Shiny.setInputValue('show_info_sap', Math.random())",
+                      "ℹ")
+        ),
         fileInput("archivo_sap", NULL,
                   accept = ".xlsx",
                   buttonLabel = "Seleccionar…",
@@ -163,6 +186,133 @@ ui <- fluidPage(
 options(shiny.maxRequestSize = 100 * 1024^2)  # 100 MB
 
 server <- function(input, output, session) {
+
+  # ── Modales de información de formato ───────
+
+  # Helper para construir una tabla HTML de esquema
+  schema_table <- function(cols) {
+    rows <- lapply(cols, function(r) {
+      tags$tr(tags$td(tags$code(r[[1]])), tags$td(r[[2]]), tags$td(r[[3]]))
+    })
+    tags$table(class = "schema-table",
+      tags$thead(tags$tr(tags$th("Columna"), tags$th("Tipo"), tags$th("Descripción"))),
+      tags$tbody(rows)
+    )
+  }
+
+  observeEvent(input$show_info_ly, {
+    showModal(modalDialog(
+      title = "📂 Formato esperado — Archivo de parámetros (LY)",
+      size  = "l",
+      easyClose = TRUE,
+      footer = modalButton("Cerrar"),
+
+      tags$p(class = "tab-note",
+        "⚠ El archivo debe ser un .xlsx con múltiples hojas. ",
+        "A continuación se describe cada hoja requerida."
+      ),
+
+      tags$h5("Hojas de categorías (una por rubro)"),
+      tags$p("Nombres de hoja: ",
+        tags$code("Cercos"), ", ",
+        tags$code("Edificios"), ", ",
+        tags$code("Terrenos"), ", ",
+        tags$code("Estructuras y caños"), ", ",
+        tags$code("Eq de Oficina"), ", ",
+        tags$code("Maquinas y Equipos"), ", ",
+        tags$code("Maquinas Mejoras"), ", ",
+        tags$code("MyU"), ", ",
+        tags$code("Rodados"), ", ",
+        tags$code("Terreno Mejoras"), ", ",
+        tags$code("Software")
+      ),
+      tags$p("Cada hoja contiene filas de activos con columnas como:"),
+      schema_table(list(
+        list("N° Activo Fijo",   "Texto",  "Número/código del activo"),
+        list("Descripción",      "Texto",  "Descripción del bien"),
+        list("Año Archivo / Cap Date", "Fecha", "Fecha de activación del bien"),
+        list("VO",               "Numérico", "Valor de origen histórico"),
+        list("VU Asignada",      "Numérico", "Vida útil en trimestres"),
+        list("VUT LY",           "Numérico", "Trimestres usados al cierre del año anterior")
+      )),
+      tags$p(style = "font-size:.8rem; color:#555;",
+        "Nota: el encabezado puede encontrarse en filas distintas según el rubro ",
+        "(p.ej. fila 13 en Cercos, fila 16 en Edificios). ",
+        "La app detecta el header automáticamente según la configuración interna."
+      ),
+
+      tags$hr(),
+
+      tags$h5("Hojas de índices"),
+      tags$p("Se requieren las siguientes hojas con 4 columnas cada una:"),
+      schema_table(list(
+        list("Columna 1", "Fecha",    "Fecha del período (formato fecha Excel)"),
+        list("Columna 2", "Numérico", "Índice del período"),
+        list("Columna 3", "Numérico", "Índice actual / de cierre"),
+        list("Columna 4", "Numérico", "Coeficiente de actualización")
+      )),
+      tags$ul(
+        tags$li(tags$code("IPC"), " — índice para bienes post-2018"),
+        tags$li(tags$code("IPIM"), " — índice para bienes pre-2018"),
+        tags$li(tags$code("IPC - VR Bajas"), " — índice IPC para cálculo de bajas"),
+        tags$li(tags$code("IPIM - VR Bajas"), " — índice IPIM para cálculo de bajas")
+      )
+    ))
+  })
+
+  observeEvent(input$show_info_sap, {
+    showModal(modalDialog(
+      title = "📥 Formato esperado — Archivo SAP (Altas / Bajas / Transferencias)",
+      size  = "l",
+      easyClose = TRUE,
+      footer = modalButton("Cerrar"),
+
+      tags$p(class = "tab-note",
+        "⚠ El archivo debe ser un .xlsx con exactamente tres hojas: ",
+        tags$code("Altas"), ", ", tags$code("Bajas"), " y ", tags$code("Transferencias"), "."
+      ),
+
+      tags$h5("Hoja: Altas"),
+      schema_table(list(
+        list("Asset",              "Texto",   "Número de activo SAP"),
+        list("Cap_Date",           "Fecha",   "Fecha de capitalización (dd.mm.yyyy)"),
+        list("PstngDate / Pstng_Date", "Fecha", "Fecha de registro contable (dd.mm.yyyy)"),
+        list("Asset_Description2", "Texto",   "Descripción del bien"),
+        list("Class",              "Texto",   "Clase SAP (p.ej. 210LA, 360LA)"),
+        list("Suma_de_Acquisition","Numérico","Valor de adquisición")
+      )),
+
+      tags$h5("Hoja: Bajas"),
+      schema_table(list(
+        list("Asset",           "Texto",   "Número de activo SAP"),
+        list("Cap_Date",        "Fecha",   "Fecha de capitalización (dd.mm.yyyy)"),
+        list("Pstng_Date",      "Fecha",   "Fecha de registro contable (dd.mm.yyyy)"),
+        list("Asset_Description","Texto",  "Descripción del bien"),
+        list("Class",           "Texto",   "Clase SAP"),
+        list("Retirement",      "Numérico","Valor de baja"),
+        list("Depr_Retired",    "Numérico","Amortización acumulada retirada")
+      )),
+
+      tags$h5("Hoja: Transferencias"),
+      schema_table(list(
+        list("Asset",              "Texto",   "Número de activo SAP"),
+        list("Cap_Date",           "Fecha",   "Fecha de capitalización (dd.mm.yyyy)"),
+        list("Pstng_Date",         "Fecha",   "Fecha de registro contable (dd.mm.yyyy)"),
+        list("Asset_Description2", "Texto",   "Descripción del bien"),
+        list("Class",              "Texto",   "Clase SAP"),
+        list("Suma_de_Transfer",   "Numérico","Valor transferido"),
+        list("Suma_de_Trans_O_Dep","Numérico","Amortización transferida")
+      )),
+
+      tags$hr(),
+      tags$p(style = "font-size:.8rem; color:#555;",
+        "Las fechas deben estar en formato ", tags$code("dd.mm.yyyy"),
+        " (texto) o como fecha Excel numérica. ",
+        "Las filas con activo que comience con 'AS' (IFRS 16) se excluyen automáticamente. ",
+        "La clase SAP se usa para mapear cada activo a su rubro contable."
+      )
+    ))
+  })
 
   # ── Estado reactivo del pipeline ────────────
   estado <- reactiveValues(
