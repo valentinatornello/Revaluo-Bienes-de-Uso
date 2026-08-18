@@ -22,10 +22,14 @@ construir_rollforward <- function(datos_limpios, anio_ejercicio = 2022) {
 
     inv_rubro <- inv_rubro %>%
       dplyr::mutate(origen = dplyr::case_when(
-        tipo_movimiento == "alta"          ~ paste0("alta_", dplyr::coalesce(as.integer(anio_movimiento), anio_alta)),
-        tipo_movimiento == "transferencia" ~ paste0("transferencia_", dplyr::coalesce(as.integer(anio_movimiento), anio_alta)),
-        tipo_movimiento == "baja"          ~ paste0("baja_", dplyr::coalesce(as.integer(anio_movimiento), anio_alta)),
-        tipo_movimiento == "alta_y_baja"   ~ paste0("alta_y_baja_", dplyr::coalesce(as.integer(anio_movimiento), anio_alta)),
+        tipo_movimiento == "alta"          ~ paste0("alta_", 
+        dplyr::coalesce(as.integer(anio_movimiento), anio_alta)),
+        tipo_movimiento == "transferencia" ~ paste0("transferencia_", 
+        dplyr::coalesce(as.integer(anio_movimiento), anio_alta)),
+        tipo_movimiento == "baja"          ~ paste0("baja_", 
+        dplyr::coalesce(as.integer(anio_movimiento), anio_alta)),
+        tipo_movimiento == "alta_y_baja"   ~ paste0("alta_y_baja_", 
+        dplyr::coalesce(as.integer(anio_movimiento), anio_alta)),
         TRUE                               ~ "historico"
       ))
 
@@ -33,7 +37,8 @@ construir_rollforward <- function(datos_limpios, anio_ejercicio = 2022) {
       if (nrow(altas_sap) > 0) {
         altas_rubro <- altas_sap %>% dplyr::filter(rubro == rubro_nombre)
         if (nrow(altas_rubro) > 0) {
-          altas_norm <- normalizar_movimiento_sap(altas_rubro, rubro_nombre, "alta", anio_ejercicio)
+      altas_norm <- normalizar_movimiento_sap(altas_rubro, 
+      rubro_nombre, "alta", anio_ejercicio)
           inv_rubro <- dplyr::bind_rows(inv_rubro, altas_norm)
         }
       }
@@ -41,7 +46,8 @@ construir_rollforward <- function(datos_limpios, anio_ejercicio = 2022) {
       if (nrow(transf_sap) > 0) {
         transf_rubro <- transf_sap %>% dplyr::filter(rubro == rubro_nombre)
         if (nrow(transf_rubro) > 0) {
-          transf_norm <- normalizar_movimiento_sap(transf_rubro, rubro_nombre, "transferencia", anio_ejercicio)
+          transf_norm <- normalizar_movimiento_sap(transf_rubro, rubro_nombre, 
+          "transferencia", anio_ejercicio)
           inv_rubro <- dplyr::bind_rows(inv_rubro, transf_norm)
         }
       }
@@ -49,7 +55,8 @@ construir_rollforward <- function(datos_limpios, anio_ejercicio = 2022) {
       if (nrow(bajas_sap) > 0) {
         bajas_rubro <- bajas_sap %>% dplyr::filter(rubro == rubro_nombre)
         if (nrow(bajas_rubro) > 0) {
-          bajas_norm <- normalizar_baja_sap(bajas_rubro, rubro_nombre, anio_ejercicio)
+          bajas_norm <- normalizar_baja_sap(bajas_rubro, rubro_nombre, 
+          anio_ejercicio)
           inv_rubro <- dplyr::bind_rows(inv_rubro, bajas_norm)
         }
       }
@@ -72,13 +79,15 @@ construir_rollforward <- function(datos_limpios, anio_ejercicio = 2022) {
       altas_r <- altas_sap %>% dplyr::filter(rubro == rubro_nombre)
       if (nrow(altas_r) > 0) {
         partes <- append(partes, list(
-          normalizar_movimiento_sap(altas_r, rubro_nombre, "alta", anio_ejercicio)
+          normalizar_movimiento_sap(altas_r, rubro_nombre, 
+          "alta", anio_ejercicio)
         ))
       }
       transf_r <- transf_sap %>% dplyr::filter(rubro == rubro_nombre)
       if (nrow(transf_r) > 0) {
         partes <- append(partes, list(
-          normalizar_movimiento_sap(transf_r, rubro_nombre, "transferencia", anio_ejercicio)
+          normalizar_movimiento_sap(transf_r, rubro_nombre, "transferencia", 
+          anio_ejercicio)
         ))
       }
       bajas_r <- bajas_sap %>% dplyr::filter(rubro == rubro_nombre)
@@ -100,7 +109,8 @@ construir_rollforward <- function(datos_limpios, anio_ejercicio = 2022) {
 normalizar_movimiento_sap <- function(mov, rubro_nombre, tipo, anio_ejercicio) {
   vu_trim <- obtener_vu_trimestres(rubro_nombre)
 
-  fecha_ref <- if (tipo == "transferencia") mov$cap_date_parsed else mov$posting_date
+  fecha_ref <- if (tipo == "transferencia") mov$cap_date_parsed 
+  else mov$posting_date
 
   tibble::tibble(
     rubro = rubro_nombre,

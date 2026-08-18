@@ -1,6 +1,5 @@
 # app.R — Shiny app para Revalúo Impositivo Bienes de Uso
 # Permite cargar archivos SAP, ejecutar el pipeline paso a paso y descargar los outputs.
-
 library(shiny)
 library(tidyverse)
 library(readxl)
@@ -159,6 +158,9 @@ ui <- fluidPage(
 # ─────────────────────────────────────────────
 #  SERVER
 # ─────────────────────────────────────────────
+# Tener en cuenta que maximum size ha sido excedido, 
+# por lo que se debe aumentar el límite de tamaño de carga de archivos en Shiny.
+options(shiny.maxRequestSize = 100 * 1024^2)  # 100 MB
 
 server <- function(input, output, session) {
 
@@ -176,7 +178,7 @@ server <- function(input, output, session) {
   )
 
   # ── Copiar archivo SAP al cargar ────────────
-  observeEvent(input$archivo_sap, {
+  observeEvent(input$archivo_sap, { 
     req(input$archivo_sap)
     dest_dir <- file.path("inputs", "SAP")
     if (!dir.exists(dest_dir)) dir.create(dest_dir, recursive = TRUE)

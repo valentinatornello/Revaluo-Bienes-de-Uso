@@ -66,13 +66,16 @@ exportar_excel_revaluo <- function(datos, ruta, anio_ejercicio = 2022) {
 
     encabezado <- tibble::tibble(
       info = c(
-        sprintf("MONSANTO ARGENTINA SRL - REVALUO IMPOSITIVO BIENES DE USO AL 31-12-%d", anio_ejercicio),
+        sprintf("MONSANTO ARGENTINA SRL - 
+        REVALUO IMPOSITIVO BIENES DE USO AL 31-12-%d", anio_ejercicio),
         sprintf("Rubro: %s", rubro),
         ""
       )
     )
-    openxlsx::writeData(wb, sheet_name, encabezado, startRow = 1, colNames = FALSE)
-    openxlsx::writeData(wb, sheet_name, d[, cols_export], startRow = 4, colNames = TRUE)
+    openxlsx::writeData(wb, sheet_name, encabezado, 
+    startRow = 1, colNames = FALSE)
+    openxlsx::writeData(wb, sheet_name, d[, cols_export], 
+    startRow = 4, colNames = TRUE)
 
     header_style <- openxlsx::createStyle(
       textDecoration = "bold",
@@ -103,7 +106,8 @@ exportar_excel_revaluo <- function(datos, ruta, anio_ejercicio = 2022) {
       label = "TOTALES"
     )
     fila_total <- nrow(d) + 5
-    openxlsx::writeData(wb, sheet_name, totales, startRow = fila_total, colNames = FALSE)
+    openxlsx::writeData(wb, sheet_name, totales, 
+    startRow = fila_total, colNames = FALSE)
 
     for (col_idx in cols_num) {
       col_name <- cols_export[col_idx]
@@ -134,19 +138,24 @@ exportar_excel_revaluo <- function(datos, ruta, anio_ejercicio = 2022) {
 exportar_hoja_pg <- function(wb, prueba_global) {
   openxlsx::addWorksheet(wb, "PG")
 
-  openxlsx::writeData(wb, "PG", "PRUEBAS GLOBALES - AMORTIZACIONES", startRow = 1)
-  openxlsx::writeData(wb, "PG", prueba_global$amortizaciones, startRow = 3, colNames = TRUE)
+  openxlsx::writeData(wb, "PG", "PRUEBAS GLOBALES - 
+  AMORTIZACIONES", startRow = 1)
+  openxlsx::writeData(wb, "PG", prueba_global$amortizaciones, 
+  startRow = 3, colNames = TRUE)
 
   fila_vr <- nrow(prueba_global$amortizaciones) + 6
-  openxlsx::writeData(wb, "PG", "PRUEBAS GLOBALES - VALOR RESIDUAL", startRow = fila_vr)
+  openxlsx::writeData(wb, "PG", "PRUEBAS GLOBALES - 
+  VALOR RESIDUAL", startRow = fila_vr)
   openxlsx::writeData(
     wb, "PG", prueba_global$valor_residual,
     startRow = fila_vr + 2, colNames = TRUE
   )
 
   openxlsx::addWorksheet(wb, "PG AXI")
-  openxlsx::writeData(wb, "PG AXI", "PRUEBAS GLOBALES - AXI (IPIM e IPC)", startRow = 1)
-  openxlsx::writeData(wb, "PG AXI", prueba_global$axi, startRow = 3, colNames = TRUE)
+  openxlsx::writeData(wb, "PG AXI", "PRUEBAS GLOBALES - 
+  AXI (IPIM e IPC)", startRow = 1)
+  openxlsx::writeData(wb, "PG AXI", prueba_global$axi, 
+  startRow = 3, colNames = TRUE)
 }
 
 exportar_hoja_indices <- function(wb, datos) {
