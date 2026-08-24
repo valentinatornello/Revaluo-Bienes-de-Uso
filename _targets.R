@@ -3,10 +3,17 @@ tar_option_set(packages = c("tidyverse", "readxl", "openxlsx", "janitor", "lubri
 
 tar_source()
 
-ANIO_EJERCICIO <- 2022
+ANIO_EJERCICIO <- {
+  anio_env <- suppressWarnings(as.integer(Sys.getenv("ANIO_EJERCICIO", unset = "")))
+  if (is.na(anio_env)) {
+    as.integer(format(Sys.Date(), "%Y")) - 1L
+  } else {
+    anio_env
+  }
+}
 PATH_EXCEL_LY <- file.path(
   "inputs", "parametros",
-  "MARG - Revaluo AxI 2022_v_28.04.23 IPIM e IPC.xlsx"
+  sprintf("MARG - Revaluo AxI %d_v_28.04.23 IPIM e IPC.xlsx", ANIO_EJERCICIO)
 )
 
 list(
@@ -14,7 +21,7 @@ list(
   tar_target(datos_limpios, limpiar_datos(datos_crudos, ANIO_EJERCICIO)),
   tar_target(inventario, construir_rollforward(datos_limpios, ANIO_EJERCICIO)),
   tar_target(axi, calcular_axi(inventario, ANIO_EJERCICIO)),
-  tar_target(prueba_global, generar_prueba_global(axi)),
+  tar_target(prueba_global, generar_prueba_global(axi, ANIO_EJERCICIO)),
   tar_target(validacion, ejecutar_validaciones(prueba_global)),
   tar_target(
     resultados_exportados,

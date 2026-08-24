@@ -1,3 +1,11 @@
+# Calcula la amortización de los rubros de bienes de uso y terrenos, reexpresando los valores originales 
+# y la amortización acumulada al cierre del ejercicio, según corresponda, y considerando las bajas de bienes de uso.
+#' @param datos_rollforward Lista con los datos de inventario, índices IPC e IPIM, y los índices de IPC e IPIM para las bajas.
+#' @param anio_ejercicio Año del ejercicio para el cual se realiza el cálculo de amortización.
+#' @return Lista con los datos de inventario actualizados con los cálculos de amortización y reexpresión.
+# Esto debe ir cambiando segun el año seleccionado en la ShinyApp.
+# Orquesta el cálculo AXI por rubro: si es terreno reexpresa VO; si es amortizable calcula
+# vida útil, amortizaciones y reexpresión, y deja el resultado dentro de datos_rollforward.
 calcular_axi <- function(datos_rollforward, anio_ejercicio = 2022) {
   inventario <- datos_rollforward$inventario
   indices_ipc <- datos_rollforward$indices_ipc
@@ -6,7 +14,7 @@ calcular_axi <- function(datos_rollforward, anio_ejercicio = 2022) {
   indices_ipim_bajas <- datos_rollforward$indices_ipim_bajas
 
   resultado <- list()
-
+# Si el inventario de un rubro es nulo o tiene cero filas, se omite el cálculo para ese rubro.
   for (rubro_nombre in names(inventario)) {
     inv <- inventario[[rubro_nombre]]
     if (is.null(inv) || nrow(inv) == 0) next
@@ -31,6 +39,7 @@ calcular_axi <- function(datos_rollforward, anio_ejercicio = 2022) {
 calcular_rubro_amortizable <- function(inv, indices_ipc, indices_ipim,
                                         indices_ipc_bajas, indices_ipim_bajas,
                                         anio_ejercicio) {
+  # Normaliza nulos para poder calcular en forma consistente (VO, VU, año y mes de alta).
   inv <- inv %>%
     dplyr::mutate(
       vo = tidyr::replace_na(vo, 0),
@@ -41,6 +50,7 @@ calcular_rubro_amortizable <- function(inv, indices_ipc, indices_ipim,
 
   inv <- inv %>%
     dplyr::mutate(
+      # Calcula trimestres amortizables del primer año según mes de alta.
       trim_primer_anio = calcular_trimestres_primer_anio(mes_alta),
 
       vut_ly = dplyr::if_else(
@@ -94,6 +104,7 @@ calcular_rubro_amortizable <- function(inv, indices_ipc, indices_ipim,
 
   inv <- inv %>%
     dplyr::mutate(
+      # Reexpresa VO y amortizaciones: IPC para altas desde 2018, IPIM para anteriores.
       coef_ipc = dplyr::if_else(
         anio_alta >= ANIO_CORTE_REVALUO,
         buscar_coeficiente(fecha_alta, indices_ipc),
@@ -101,7 +112,7 @@ calcular_rubro_amortizable <- function(inv, indices_ipc, indices_ipim,
       ),
 
       coef_ipim = buscar_coeficiente(fecha_alta, indices_ipim),
-
+# EVALUAR SI ES EL IPC O EL IPIM EL COEFICIENTE AL QUE TENEMOS QUE MULTIPLICAR EL VO DE LOS BIENES DADOS DE BAJA, SEGUN EL ANIO DE ALTA
       vo_reexp = dplyr::if_else(
         anio_alta >= ANIO_CORTE_REVALUO,
         vo * coef_ipc,
@@ -128,14 +139,15 @@ calcular_rubro_amortizable <- function(inv, indices_ipc, indices_ipim,
 
       vr_reexp = vo_reexp - amort_acum_cierre_reexp
     )
-
+  # Si la VU ya estaba agotada al cierre anterior, calcula el ajuste negativo del ejercicio
+  # para no sobre-amortizar y reflejar el trimestre que no corresponde computar.
   inv <- inv %>%
     dplyr::mutate(
       es_vu_agotada_ly = (vut_ly >= vu_asignada & vu_asignada > 0),
 
       # para bienes que agotaron la VU en el ejercicio anterior, calculamos el
       # ajuste como la amortizacion que se habria devengado si la VU no estuviera
-      # agotada (o sea, el trimestre normal que no se computa)
+      # agotada (o sea, el triimestre normal que no se computa)
       amort_bs_agotaron_vu_ly = dplyr::if_else(
         es_vu_agotada_ly,
         -amort_trimestre * dplyr::if_else(
@@ -148,7 +160,8 @@ calcular_rubro_amortizable <- function(inv, indices_ipc, indices_ipim,
     )
 
   inv <- calcular_bajas_reexp(inv, indices_ipc_bajas, indices_ipim_bajas)
-
+# 
+  # Para movimientos de baja, anula devengado del ejercicio y deja saldos al valor de LY.
   inv <- inv %>%
     dplyr::mutate(
       vut_ejercicio = dplyr::if_else(tipo_movimiento == "baja", 0, vut_ejercicio),
@@ -165,6 +178,8 @@ calcular_rubro_amortizable <- function(inv, indices_ipc, indices_ipim,
   inv
 }
 
+# Para terrenos: no amortiza, solo reexpresa VO con IPC/IPIM según año de alta
+# y mantiene VR igual al VO reexpresado.
 calcular_terrenos <- function(inv, indices_ipc, indices_ipim, anio_ejercicio) {
   inv <- inv %>%
     dplyr::mutate(
@@ -206,6 +221,8 @@ calcular_terrenos <- function(inv, indices_ipc, indices_ipim, anio_ejercicio) {
   inv
 }
 
+# Calcula la reexpresión de amortización acumulada y VR únicamente para bienes dados de baja,
+# usando IPC o IPIM de bajas según corresponda por año de alta.
 calcular_bajas_reexp <- function(inv, indices_ipc_bajas, indices_ipim_bajas) {
   inv <- inv %>%
     dplyr::mutate(

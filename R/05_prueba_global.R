@@ -1,8 +1,8 @@
-generar_prueba_global <- function(datos_axi) {
+generar_prueba_global <- function(datos_axi, anio_ejercicio = 2022) {
   resultado_axi <- datos_axi$resultado_axi
 
-  pg_amort <- generar_pg_amortizaciones(resultado_axi)
-  pg_vr <- generar_pg_valor_residual(resultado_axi)
+  pg_amort <- generar_pg_amortizaciones(resultado_axi, anio_ejercicio)
+  pg_vr <- generar_pg_valor_residual(resultado_axi, anio_ejercicio)
   pg_axi <- generar_pg_axi(resultado_axi)
 
   datos_axi$prueba_global <- list(
@@ -14,9 +14,8 @@ generar_prueba_global <- function(datos_axi) {
   datos_axi
 }
 
-generar_pg_amortizaciones <- function(resultado_axi) {
+generar_pg_amortizaciones <- function(resultado_axi, anio_ejercicio = 2022) {
   rubros <- names(resultado_axi)
-  anio_ejercicio <- 2022
 
   pg <- tibble::tibble(rubro = rubros)
 
@@ -80,9 +79,8 @@ generar_pg_amortizaciones <- function(resultado_axi) {
   pg
 }
 
-generar_pg_valor_residual <- function(resultado_axi) {
+generar_pg_valor_residual <- function(resultado_axi, anio_ejercicio = 2022) {
   rubros <- names(resultado_axi)
-  anio_ejercicio <- 2022
 
   pg <- tibble::tibble(rubro = rubros)
 

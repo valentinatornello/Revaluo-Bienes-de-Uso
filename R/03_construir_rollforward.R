@@ -5,7 +5,6 @@ construir_rollforward <- function(datos_limpios, anio_ejercicio = 2022) {
   altas_sap <- datos_limpios$altas
   bajas_sap <- datos_limpios$bajas
   transf_sap <- datos_limpios$transferencias
-  anio_ejercicio <- 2022
 
   tiene_mov_anio <- any(purrr::map_lgl(inventario, function(inv) {
     any(!is.na(inv$anio_movimiento) & inv$anio_movimiento == anio_ejercicio)
@@ -19,6 +18,7 @@ construir_rollforward <- function(datos_limpios, anio_ejercicio = 2022) {
 
   for (rubro_nombre in todos_rubros) {
     inv_rubro <- inventario[[rubro_nombre]]
+    if (is.null(inv_rubro)) next
 
     inv_rubro <- inv_rubro %>%
       dplyr::mutate(origen = dplyr::case_when(
