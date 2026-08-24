@@ -84,7 +84,7 @@ ui <- fluidPage(
     "))
   ),
 
-  titlePanel("📊 Revalúo Impositivo — Bienes de Uso"),
+  titlePanel("📊 Revalúo Impositivo — Bienes de Uso AgroBayer"),
 
   sidebarLayout(
     sidebarPanel(
@@ -92,7 +92,7 @@ ui <- fluidPage(
       div(class = "sidebar-panel",
 
         div(class = "section-header", "⚙️ Parámetros"),
-        numericInput("anio_ejercicio", "Año de ejercicio:", value = ANIO_EJERCICIO_DEFAULT,
+        numericInput("anio_ejercicio", "Año de ejercicio:", value = ANIO_EJERCICIO,
                      min = 2000, max = 2100, step = 1),
 
         hr(),
@@ -410,7 +410,7 @@ server <- function(input, output, session) {
 
     # ── Paso 5: prueba global ────────────────
     tryCatch({
-      estado$prueba_global <- generar_prueba_global(estado$axi)
+      estado$prueba_global <- generar_prueba_global(estado$axi, anio)
       estado$paso <- 5L
     }, error = function(e) {
       estado$error_msg <- paste("Paso 5 — Error en prueba global:", e$message)
@@ -504,7 +504,7 @@ server <- function(input, output, session) {
         tags$td(tipos)
       )
     })
-
+ # Separar el número de filas por movimiento y mostrarlo en la tabla de resumen # RECORDAR
     tags$table(class = "summary-table",
       tags$thead(tags$tr(lapply(c("Rubro", "Filas", "Tipos de movimiento"), tags$th))),
       tags$tbody(rows)
