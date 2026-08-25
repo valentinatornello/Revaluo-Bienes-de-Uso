@@ -24,7 +24,7 @@ for (script in c(
 )) {
   sys.source(script, envir = pipeline_env)
 }
-
+ 
 importar_datos <- function(path_excel_ly, inputs_dir = "inputs") {
   pipeline_env$importar_datos(path_excel_ly, inputs_dir)
 }
@@ -61,7 +61,7 @@ exportar_resumen <- function(datos, ruta, anio_ejercicio) {
   pipeline_env$exportar_resumen(datos, ruta, anio_ejercicio)
 }
 
-ANIO_EJERCICIO_DEFAULT <- as.integer(format(Sys.Date(), "%Y")) - 1L
+anio_ejercicio_default <- as.integer(format(Sys.Date(), "%Y")) - 1L
 
 # ─────────────────────────────────────────────
 #  Helpers
@@ -133,7 +133,7 @@ ui <- fluidPage(
       div(class = "sidebar-panel",
 
         div(class = "section-header", "⚙️ Parámetros"),
-        numericInput("anio_ejercicio", "Año de ejercicio:", value = ANIO_EJERCICIO_DEFAULT,
+        numericInput("anio_ejercicio", "Año de ejercicio:", value = anio_ejercicio_default,
                      min = 2000, max = 2100, step = 1),
 
         hr(),
@@ -695,7 +695,7 @@ server <- function(input, output, session) {
       file.copy(estado$archivos_output$revaluo, file)
     }
   )
-
+  
   output$dl_validaciones <- downloadHandler(
     filename = function() sprintf("validaciones_%d.xlsx", as.integer(input$anio_ejercicio)),
     content  = function(file) {
