@@ -92,7 +92,7 @@ ui <- fluidPage(
       div(class = "sidebar-panel",
 
         div(class = "section-header", "⚙️ Parámetros"),
-        numericInput("anio_ejercicio", "Año de ejercicio:", value = ANIO_EJERCICIO,
+        numericInput("anio_ejercicio", "Año de ejercicio:", value = ANIO_EJERCICIO_DEFAULT,
                      min = 2000, max = 2100, step = 1),
 
         hr(),
@@ -132,7 +132,22 @@ ui <- fluidPage(
         br(), br(),
         downloadButton("dl_validaciones","Validaciones (.xlsx)"),
         br(), br(),
-        downloadButton("dl_resumen",     "Resumen AXI (.xlsx)")
+        downloadButton("dl_resumen",     "Resumen AXI (.xlsx)"),
+
+        hr(),
+        div(class = "section-header", "📋 Reglas clave"),
+        div(class = "tab-note",
+          tags$ul(style = "margin:0; padding-left:16px;",
+            tags$li("Bienes adquiridos ", tags$b("antes de 2018"), ": se reexpresan con IPIM; no con IPC."),
+            tags$li("Bienes adquiridos ", tags$b("desde 2018"), ": se reexpresan con IPC."),
+            tags$li("Los ", tags$b("terrenos"), " no amortizan (VU = 0)."),
+            tags$li("VU expresada en ", tags$b("trimestres"),
+                    ". El primer año se cuentan trimestres desde el mes de alta."),
+            tags$li("Activos cuyo número comienza con ", tags$code("AS"),
+                    " son IFRS 16 y ", tags$b("se excluyen"), " del cálculo."),
+            tags$li("Las ", tags$b("bajas"), " congelan saldos al inicio del ejercicio (valores LY).")
+          )
+        )
       )
     ),
 
@@ -166,12 +181,35 @@ ui <- fluidPage(
       # ── Paso 5 ──────────────────────────────
       div(class = "step-box",
         div(class = "step-title", "Paso 5 — Prueba global"),
+        div(class = "tab-note",
+          "ℹ La prueba global cuadra el saldo calculado (s/prueba) con el saldo del revalúo (s/revalúo) por rubro. ",
+          "Las diferencias se colorean: ",
+          tags$span(style = "color:green;font-weight:bold;", "verde"), " ≤ $1 · ",
+          tags$span(style = "color:#9C5700;font-weight:bold;", "ámbar"), " $1–$100 · ",
+          tags$span(style = "color:red;font-weight:bold;", "rojo"), " > $100."
+        ),
         uiOutput("paso5_ui")
       ),
 
       # ── Paso 6 ──────────────────────────────
       div(class = "step-box",
         div(class = "step-title", "Paso 6 — Validaciones"),
+        div(class = "tab-note",
+          tags$b("ℹ Criterios de validación:"),
+          tags$ul(style = "margin:4px 0 0 0; padding-left:18px;",
+            tags$li(tags$b("consistencia_interna"), ": verifica que Amort acum = Amort trim × VUT cierre, y que VR = VO − Amort acum, activo por activo."),
+            tags$li(tags$b("prueba_global_amort / prueba_global_vr"), ": cuadre entre saldo calculado (s/prueba) y saldo del revalúo (s/revalúo) por rubro."),
+            tags$li(tags$b("vr_reexp_formula"), ": verifica que VR Reexp = VO Reexp − Amort Acum Reexp para todos los activos.")
+          ),
+          tags$p(style = "margin:6px 0 0 0;",
+            tags$b("Tolerancias — Prueba Global:"),
+            " diferencia < $1 = OK · $1–$100 = ",
+            tags$span(class = "badge-warn", "ADVERTENCIA"),
+            " · > $100 = ",
+            tags$span(class = "badge-error", "ERROR"),
+            ". Las advertencias de pequeña magnitud pueden ser producto de redondeo y deben revisarse manualmente."
+          )
+        ),
         uiOutput("paso6_ui")
       )
     )
@@ -181,13 +219,8 @@ ui <- fluidPage(
 # ─────────────────────────────────────────────
 #  SERVER
 # ─────────────────────────────────────────────
-# Tener en cuenta que maximum size ha sido excedido, 
-# por lo que se debe aumentar el límite de tamaño de carga de archivos en Shiny.
-options(shiny.maxRequestSize = 100 * 1024^2)  # 100 MB
 
 server <- function(input, output, session) {
-
-  # ── Modales de información de formato ───────
 
   # Helper para construir una tabla HTML de esquema
   schema_table <- function(cols) {

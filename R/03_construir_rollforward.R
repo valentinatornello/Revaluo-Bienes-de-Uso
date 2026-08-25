@@ -123,6 +123,7 @@ normalizar_movimiento_sap <- function(mov, rubro_nombre, tipo, anio_ejercicio) {
     vo = mov$valor,
     vu_asignada = vu_trim,
     vut_ly = NA_real_,
+    anio_movimiento = anio_ejercicio,
     origen = paste0(tipo, "_", anio_ejercicio)
   )
 }
@@ -141,6 +142,7 @@ normalizar_baja_sap <- function(bajas, rubro_nombre, anio_ejercicio) {
     vo = bajas$valor,
     vu_asignada = vu_trim,
     vut_ly = NA_real_,
+    anio_movimiento = anio_ejercicio,
     origen = paste0("baja_", anio_ejercicio)
   )
 }
