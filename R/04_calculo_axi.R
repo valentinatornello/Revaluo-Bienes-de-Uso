@@ -12,6 +12,7 @@ calcular_axi <- function(datos_rollforward, anio_ejercicio = 2022) {
   indices_ipim <- datos_rollforward$indices_ipim
   indices_ipc_bajas <- datos_rollforward$indices_ipc_bajas
   indices_ipim_bajas <- datos_rollforward$indices_ipim_bajas
+  excepciones_fecha_base <- datos_rollforward$excepciones_fecha_base
 
   resultado <- list()
 # Si el inventario de un rubro es nulo o tiene cero filas, se omite el cálculo para ese rubro.
@@ -20,12 +21,14 @@ calcular_axi <- function(datos_rollforward, anio_ejercicio = 2022) {
     if (is.null(inv) || nrow(inv) == 0) next
 
     if (es_terreno(rubro_nombre)) {
-      inv <- calcular_terrenos(inv, indices_ipc, indices_ipim, anio_ejercicio)
+      inv <- calcular_terrenos(
+        inv, indices_ipc, indices_ipim, anio_ejercicio, excepciones_fecha_base
+      )
     } else {
       inv <- calcular_rubro_amortizable(
         inv, indices_ipc, indices_ipim,
         indices_ipc_bajas, indices_ipim_bajas,
-        anio_ejercicio
+        anio_ejercicio, excepciones_fecha_base
       )
     }
 
@@ -38,7 +41,8 @@ calcular_axi <- function(datos_rollforward, anio_ejercicio = 2022) {
 
 calcular_rubro_amortizable <- function(inv, indices_ipc, indices_ipim,
                                         indices_ipc_bajas, indices_ipim_bajas,
-                                        anio_ejercicio) {
+                                        anio_ejercicio,
+                                        excepciones_fecha_base = SCHEMA_EXCEPCIONES_FECHA_BASE) {
   # Normaliza nulos para poder calcular en forma consistente (VO, VU, año y mes de alta).
   inv <- inv %>%
     dplyr::mutate(
@@ -47,6 +51,8 @@ calcular_rubro_amortizable <- function(inv, indices_ipc, indices_ipim,
       anio_alta = tidyr::replace_na(anio_alta, anio_ejercicio),
       mes_alta = tidyr::replace_na(mes_alta, 1)
     )
+
+  inv <- aplicar_excepciones_fecha_base(inv, excepciones_fecha_base)
 
   inv <- inv %>%
     dplyr::mutate(
@@ -107,11 +113,11 @@ calcular_rubro_amortizable <- function(inv, indices_ipc, indices_ipim,
       # Reexpresa VO y amortizaciones: IPC para altas desde 2018, IPIM para anteriores.
       coef_ipc = dplyr::if_else(
         anio_alta >= ANIO_CORTE_REVALUO,
-        buscar_coeficiente(fecha_alta, indices_ipc),
+        buscar_coeficiente(fecha_indice_reexp, indices_ipc),
         1
       ),
 
-      coef_ipim = buscar_coeficiente(fecha_alta, indices_ipim),
+      coef_ipim = buscar_coeficiente(fecha_indice_reexp, indices_ipim),
 # EVALUAR SI ES EL IPC O EL IPIM EL COEFICIENTE AL QUE TENEMOS QUE MULTIPLICAR EL VO DE LOS BIENES DADOS DE BAJA, SEGUN EL ANIO DE ALTA
       vo_reexp = dplyr::if_else(
         anio_alta >= ANIO_CORTE_REVALUO,
@@ -180,7 +186,8 @@ calcular_rubro_amortizable <- function(inv, indices_ipc, indices_ipim,
 
 # Para terrenos: no amortiza, solo reexpresa VO con IPC/IPIM según año de alta
 # y mantiene VR igual al VO reexpresado.
-calcular_terrenos <- function(inv, indices_ipc, indices_ipim, anio_ejercicio) {
+calcular_terrenos <- function(inv, indices_ipc, indices_ipim, anio_ejercicio,
+                              excepciones_fecha_base = SCHEMA_EXCEPCIONES_FECHA_BASE) {
   inv <- inv %>%
     dplyr::mutate(
       vo = tidyr::replace_na(vo, 0),
@@ -199,10 +206,15 @@ calcular_terrenos <- function(inv, indices_ipc, indices_ipim, anio_ejercicio) {
       vu_restante = 0,
       trim_primer_anio = 0,
       es_vu_agotada_ly = FALSE,
-      amort_bs_agotaron_vu_ly = 0,
+      amort_bs_agotaron_vu_ly = 0
+    )
 
-      coef_ipc = buscar_coeficiente(fecha_alta, indices_ipc),
-      coef_ipim = buscar_coeficiente(fecha_alta, indices_ipim),
+  inv <- aplicar_excepciones_fecha_base(inv, excepciones_fecha_base)
+
+  inv <- inv %>%
+    dplyr::mutate(
+      coef_ipc = buscar_coeficiente(fecha_indice_reexp, indices_ipc),
+      coef_ipim = buscar_coeficiente(fecha_indice_reexp, indices_ipim),
 
       vo_reexp = dplyr::if_else(
         anio_alta >= ANIO_CORTE_REVALUO,
@@ -230,13 +242,13 @@ calcular_bajas_reexp <- function(inv, indices_ipc_bajas, indices_ipim_bajas) {
 
       coef_ipc_bajas = dplyr::if_else(
         es_baja & anio_alta >= ANIO_CORTE_REVALUO,
-        buscar_coeficiente(fecha_alta, indices_ipc_bajas),
+        buscar_coeficiente(fecha_indice_reexp, indices_ipc_bajas),
         0
       ),
 
       coef_ipim_bajas = dplyr::if_else(
         es_baja & anio_alta < ANIO_CORTE_REVALUO,
-        buscar_coeficiente(fecha_alta, indices_ipim_bajas),
+        buscar_coeficiente(fecha_indice_reexp, indices_ipim_bajas),
         0
       ),
 
