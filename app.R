@@ -52,7 +52,6 @@ ejecutar_validaciones <- function(datos_pg) {
 exportar_excel_revaluo <- function(datos, ruta, anio_ejercicio) {
   pipeline_env$exportar_excel_revaluo(datos, ruta, anio_ejercicio)
 }
-
 exportar_validaciones <- function(datos, ruta) {
   pipeline_env$exportar_validaciones(datos, ruta)
 }
@@ -86,6 +85,56 @@ resultado_color <- function(r) {
     "ADVERTENCIA" = "color:#9C5700;font-weight:bold",
     ""
   )
+}
+
+# Construye tablas de referencia para la sección informativa de la UI.
+referencias_revaluo <- function() {
+  # Define conceptos clave usados a lo largo del proceso de cálculo.
+  conceptos <- tibble::tibble(
+    concepto = c("VO", "Amortización acumulada", "VR", "VR Reexpresado", "AXI", "VU Asignada", "VUT"),
+    definicion = c(
+      "Valor de origen histórico del bien.",
+      "Suma de amortizaciones devengadas hasta la fecha de corte.",
+      "Valor residual histórico (VO menos amortización acumulada).",
+      "Valor residual ajustado por índices (IPC/IPIM).",
+      "Ajuste por inflación impositivo del bien.",
+      "Vida útil total del bien expresada en trimestres.",
+      "Vida útil transcurrida del bien expresada en trimestres."
+    )
+  )
+
+  # Lista abreviaturas y su significado operativo en el cálculo.
+  abreviaturas <- tibble::tibble(
+    abreviatura = c("IPC", "IPIM", "LY", "PG", "IFRS16"),
+    significado = c(
+      "Índice de Precios al Consumidor.",
+      "Índice de Precios Internos al por Mayor.",
+      "Last Year: inventario de cierre del ejercicio anterior.",
+      "Prueba Global de consistencia del resultado.",
+      "Operaciones de arrendamiento: activos con prefijo AS se excluyen."
+    )
+  )
+
+  # Resume fórmulas de control y cálculo usadas por el equipo.
+  formulas <- tibble::tibble(
+    formula = c(
+      "Amort. acumulada = amort_trimestre × VUT cierre",
+      "VR = VO - Amort. acumulada",
+      "VR Reexp = VO Reexp - Amort. Acum. Reexp",
+      "AXI = VR Reexp - VR",
+      "PG diferencia = saldo s/prueba - saldo s/revalúo"
+    ),
+    nota = c(
+      "Control de consistencia por activo/rubro.",
+      "Cálculo base en valores históricos.",
+      "Cálculo ajustado por índice de actualización.",
+      "Resultado del ajuste impositivo por inflación.",
+      "Debe tender a 0 para validar el proceso."
+    )
+  )
+
+  # Devuelve la estructura completa para renderizar en server.
+  list(conceptos = conceptos, abreviaturas = abreviaturas, formulas = formulas)
 }
 
 # ─────────────────────────────────────────────
@@ -214,6 +263,12 @@ ui <- fluidPage(
       div(class = "step-box",
         div(class = "step-title", "Paso 6 — Validaciones"),
         uiOutput("paso6_ui")
+      ),
+
+      # ── Referencias ─────────────────────────
+      div(class = "step-box",
+        div(class = "step-title", "Referencias — Conceptos, abreviaturas y fórmulas"),
+        uiOutput("referencias_ui")
       )
     )
   )
@@ -681,6 +736,36 @@ server <- function(input, output, session) {
         tags$thead(tags$tr(lapply(c("Tipo", "Rubro", "Descripción", "Resultado", "Valor"), tags$th))),
         tags$tbody(rows)
       )
+    )
+  })
+
+  # ── Referencias ────────────────────────────
+  output$referencias_ui <- renderUI({
+    # Obtiene el contenido documental para mostrarlo en tablas.
+    refs <- referencias_revaluo()
+
+    # Renderiza una tabla HTML simple para cada bloque de referencia.
+    render_ref_table <- function(df, titulo) {
+      tags$div(
+        tags$p(style = "font-weight:bold; margin-top:10px;", titulo),
+        tags$table(class = "summary-table",
+          tags$thead(tags$tr(lapply(names(df), tags$th))),
+          tags$tbody(
+            lapply(seq_len(nrow(df)), function(i) {
+              tags$tr(lapply(df[i, , drop = FALSE], function(v) tags$td(as.character(v))))
+            })
+          )
+        )
+      )
+    }
+
+    # Muestra conceptos, abreviaturas y fórmulas en el orden funcional del proceso.
+    tagList(
+      tags$p(style = "font-size:.85rem; color:#555;",
+             "Fuente: reglas de revalúo interno (conceptos de cálculo y controles de validación)."),
+      render_ref_table(refs$conceptos, "Definiciones de conceptos"),
+      render_ref_table(refs$abreviaturas, "Abreviaturas"),
+      render_ref_table(refs$formulas, "Fórmulas de referencia")
     )
   })
 
