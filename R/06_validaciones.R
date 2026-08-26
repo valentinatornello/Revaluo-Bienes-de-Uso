@@ -6,8 +6,19 @@ ejecutar_validaciones <- function(datos_pg) {
   val_pg_amort <- validar_pg_amortizaciones(prueba_global$amortizaciones)
   val_pg_vr <- validar_pg_valor_residual(prueba_global$valor_residual)
   val_vr_formula <- validar_vr_formula(resultado_axi)
+  val_movimientos <- validar_conteos_movimientos(datos_pg$auditoria_movimientos)
+  val_valores_negativos <- validar_valores_reexpresados_negativos(resultado_axi)
+  val_excepciones_fecha <- validar_excepciones_fecha_base(resultado_axi)
 
-  todas <- dplyr::bind_rows(val_internas, val_pg_amort, val_pg_vr, val_vr_formula)
+  todas <- dplyr::bind_rows(
+    val_internas,
+    val_pg_amort,
+    val_pg_vr,
+    val_vr_formula,
+    val_movimientos,
+    val_valores_negativos,
+    val_excepciones_fecha
+  )
 
   errores <- todas %>% dplyr::filter(resultado == "ERROR")
   advertencias <- todas %>% dplyr::filter(resultado == "ADVERTENCIA")
@@ -27,7 +38,7 @@ ejecutar_validaciones <- function(datos_pg) {
 
 validar_consistencia_interna <- function(resultado_axi) {
   validaciones <- list()
-  tolerancia <- 0.01
+  tolerancia <- TOLERANCIA_CONSISTENCIA_INTERNA
 
   for (rubro in names(resultado_axi)) {
     d <- resultado_axi[[rubro]]
@@ -88,7 +99,7 @@ validar_consistencia_interna <- function(resultado_axi) {
 }
 
 validar_pg_amortizaciones <- function(pg_amort) {
-  tolerancia_pg <- 1
+  tolerancia_pg <- TOLERANCIA_PRUEBA_GLOBAL
 
   errores <- pg_amort %>%
     dplyr::filter(abs(diferencia) > tolerancia_pg)
@@ -101,7 +112,7 @@ validar_pg_amortizaciones <- function(pg_amort) {
         "PG Amort: diferencia = %.4f",
         errores$diferencia
       ),
-      resultado = ifelse(abs(errores$diferencia) > 100, "ERROR", "ADVERTENCIA"),
+      resultado = ifelse(abs(errores$diferencia) > UMBRAL_ERROR_PRUEBA_GLOBAL, "ERROR", "ADVERTENCIA"),
       valor = errores$diferencia
     )
   } else {
@@ -116,7 +127,7 @@ validar_pg_amortizaciones <- function(pg_amort) {
 }
 
 validar_pg_valor_residual <- function(pg_vr) {
-  tolerancia_pg <- 1
+  tolerancia_pg <- TOLERANCIA_PRUEBA_GLOBAL
 
   errores <- pg_vr %>%
     dplyr::filter(abs(diferencia) > tolerancia_pg)
@@ -129,7 +140,7 @@ validar_pg_valor_residual <- function(pg_vr) {
         "PG VR: diferencia = %.4f",
         errores$diferencia
       ),
-      resultado = ifelse(abs(errores$diferencia) > 100, "ERROR", "ADVERTENCIA"),
+      resultado = ifelse(abs(errores$diferencia) > UMBRAL_ERROR_PRUEBA_GLOBAL, "ERROR", "ADVERTENCIA"),
       valor = errores$diferencia
     )
   } else {
@@ -145,7 +156,7 @@ validar_pg_valor_residual <- function(pg_vr) {
 
 validar_vr_formula <- function(resultado_axi) {
   validaciones <- list()
-  tolerancia <- 0.01
+  tolerancia <- TOLERANCIA_CONSISTENCIA_INTERNA
 
   for (rubro in names(resultado_axi)) {
     d <- resultado_axi[[rubro]]
@@ -183,4 +194,113 @@ validar_vr_formula <- function(resultado_axi) {
   }
 
   dplyr::bind_rows(validaciones)
+}
+
+validar_conteos_movimientos <- function(auditoria_movimientos) {
+  if (is.null(auditoria_movimientos) || nrow(auditoria_movimientos) == 0) {
+    return(tibble::tibble(
+      tipo = "conteos_movimientos_sap",
+      rubro = "TODOS",
+      descripcion = "No hay auditoria de movimientos SAP para validar conteos",
+      resultado = "ADVERTENCIA",
+      valor = NA_real_
+    ))
+  }
+
+  diferencias <- auditoria_movimientos %>%
+    dplyr::filter(!is.na(conteo_esperado), diferencia_conteo != 0)
+
+  if (nrow(diferencias) == 0) {
+    return(tibble::tibble(
+      tipo = "conteos_movimientos_sap",
+      rubro = "TODOS",
+      descripcion = "Conteos de movimientos SAP coinciden con el detalle esperado",
+      resultado = "OK",
+      valor = 0
+    ))
+  }
+
+  tibble::tibble(
+    tipo = "conteos_movimientos_sap",
+    rubro = diferencias$tipo_movimiento_sap,
+    descripcion = sprintf(
+      "Conteo detalle SAP observado %d vs esperado %d",
+      diferencias$filas_detalle,
+      diferencias$conteo_esperado
+    ),
+    resultado = "ERROR",
+    valor = diferencias$diferencia_conteo
+  )
+}
+
+validar_valores_reexpresados_negativos <- function(resultado_axi) {
+  validaciones <- list()
+
+  for (rubro in names(resultado_axi)) {
+    d <- resultado_axi[[rubro]]
+    if (nrow(d) == 0) next
+
+    if (!"direccion_movimiento" %in% names(d)) {
+      d$direccion_movimiento <- NA_character_
+    }
+
+    negativos <- d %>%
+      dplyr::filter(
+        tipo_movimiento != "transferencia" | is.na(direccion_movimiento) | direccion_movimiento != "salida",
+        vo_reexp < 0 | vr_reexp < 0
+      )
+
+    if (nrow(negativos) > 0) {
+      validaciones <- append(validaciones, list(tibble::tibble(
+        tipo = "valores_reexpresados_negativos",
+        rubro = rubro,
+        descripcion = sprintf("VO/VR reexpresado negativo en %d activos", nrow(negativos)),
+        resultado = "ERROR",
+        valor = nrow(negativos)
+      )))
+    }
+  }
+
+  if (length(validaciones) == 0) {
+    return(tibble::tibble(
+      tipo = "valores_reexpresados_negativos",
+      rubro = "TODOS",
+      descripcion = "No hay VO/VR reexpresados negativos no justificados",
+      resultado = "OK",
+      valor = 0
+    ))
+  }
+
+  dplyr::bind_rows(validaciones)
+}
+
+validar_excepciones_fecha_base <- function(resultado_axi) {
+  aplicadas <- purrr::map_dfr(names(resultado_axi), function(rubro) {
+    d <- resultado_axi[[rubro]]
+    if (!"regla_fecha_base_aplicada" %in% names(d)) return(tibble::tibble())
+
+    d %>%
+      dplyr::filter(regla_fecha_base_aplicada) %>%
+      dplyr::summarise(valor = dplyr::n(), .groups = "drop") %>%
+      dplyr::filter(valor > 0) %>%
+      dplyr::mutate(rubro = rubro)
+  })
+
+  if (nrow(aplicadas) == 0) {
+    return(tibble::tibble(
+      tipo = "excepciones_fecha_base",
+      rubro = "TODOS",
+      descripcion = "No se aplicaron excepciones de fecha base",
+      resultado = "OK",
+      valor = 0
+    ))
+  }
+
+  tibble::tibble(
+    tipo = "excepciones_fecha_base",
+    rubro = aplicadas$rubro,
+    descripcion = sprintf("Excepciones de fecha base aplicadas en %d activos", aplicadas$valor),
+    resultado = "OK",
+    valor = aplicadas$valor
+  )
 }

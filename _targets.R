@@ -1,5 +1,5 @@
 library(targets)
-tar_option_set(packages = c("tidyverse", "readxl", "openxlsx", "janitor", "lubridate"))
+tar_option_set(packages = c("tidyverse", "readxl", "openxlsx", "janitor", "lubridate", "readr"))
 
 tar_source()
 

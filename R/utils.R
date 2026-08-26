@@ -5,6 +5,7 @@ check_required_packages <- function(
     "openxlsx",
     "janitor",
     "lubridate",
+    "readr",
     "targets"
   )
 ) {
@@ -39,6 +40,77 @@ PARAMETROS_RUBROS <- tibble::tribble(
 )
 
 ANIO_CORTE_REVALUO <- 2018
+
+CONTEOS_MOVIMIENTOS_ESPERADOS <- tibble::tribble(
+  ~tipo_movimiento_sap, ~conteo_esperado,
+  "alta",              4873L,
+  "baja",              1717L,
+  "transferencia",     1738L
+)
+
+TOLERANCIA_PRUEBA_GLOBAL <- 1
+UMBRAL_ERROR_PRUEBA_GLOBAL <- 100
+TOLERANCIA_CONSISTENCIA_INTERNA <- 0.01
+
+SCHEMA_EXCEPCIONES_FECHA_BASE <- tibble::tibble(
+  rubro = character(),
+  nro_activo_fijo = character(),
+  fecha_base_reexpresion = as.Date(character()),
+  inicio_indice_desde = as.Date(character()),
+  motivo = character(),
+  fuente_manual = character(),
+  activo = logical()
+)
+
+normalizar_clave_activo <- function(x) {
+  stringr::str_trim(as.character(x))
+}
+
+es_fila_detalle_sap <- function(nro_activo) {
+  activo <- normalizar_clave_activo(nro_activo)
+  !is.na(activo) &
+    activo != "" &
+    !grepl("^(total|grand total|subtotal|totales?)\\b", activo, ignore.case = TRUE)
+}
+
+aplicar_excepciones_fecha_base <- function(inv, excepciones_fecha_base = SCHEMA_EXCEPCIONES_FECHA_BASE) {
+  if (!"fecha_alta" %in% names(inv)) {
+    inv$fecha_alta <- as.Date(NA)
+  }
+
+  inv <- inv %>%
+    dplyr::mutate(
+      nro_activo_fijo = normalizar_clave_activo(nro_activo_fijo),
+      fecha_indice_reexp = fecha_alta,
+      regla_fecha_base_aplicada = FALSE,
+      motivo_excepcion_fecha_base = NA_character_
+    )
+
+  if (is.null(excepciones_fecha_base) || nrow(excepciones_fecha_base) == 0) {
+    return(inv)
+  }
+
+  excepciones_activas <- excepciones_fecha_base %>%
+    dplyr::filter(dplyr::coalesce(activo, TRUE)) %>%
+    dplyr::mutate(
+      nro_activo_fijo = normalizar_clave_activo(nro_activo_fijo),
+      fecha_indice_excepcion = dplyr::coalesce(inicio_indice_desde, fecha_base_reexpresion)
+    ) %>%
+    dplyr::select(
+      rubro,
+      nro_activo_fijo,
+      fecha_indice_excepcion,
+      motivo_excepcion_fecha_base = motivo
+    )
+
+  inv %>%
+    dplyr::left_join(excepciones_activas, by = c("rubro", "nro_activo_fijo")) %>%
+    dplyr::mutate(
+      fecha_indice_reexp = dplyr::coalesce(fecha_indice_excepcion, fecha_indice_reexp),
+      regla_fecha_base_aplicada = !is.na(fecha_indice_excepcion)
+    ) %>%
+    dplyr::select(-fecha_indice_excepcion)
+}
 
 calcular_trimestres_primer_anio <- function(mes_alta) {
   4L - floor((mes_alta - 1L) / 3L)

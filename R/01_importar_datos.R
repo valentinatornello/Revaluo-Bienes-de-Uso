@@ -6,6 +6,25 @@ obtener_rutas_inputs <- function(inputs_dir = "inputs") {
 }
 obtener_rutas_inputs()
 
+leer_excepciones_fecha_base <- function(path_parametros) {
+  path_csv <- file.path(path_parametros, "excepciones_fecha_base.csv")
+
+  if (!file.exists(path_csv)) {
+    return(SCHEMA_EXCEPCIONES_FECHA_BASE)
+  }
+
+  readr::read_csv(path_csv, show_col_types = FALSE) %>%
+    dplyr::transmute(
+      rubro = as.character(rubro),
+      nro_activo_fijo = normalizar_clave_activo(nro_activo_fijo),
+      fecha_base_reexpresion = as.Date(fecha_base_reexpresion),
+      inicio_indice_desde = as.Date(inicio_indice_desde),
+      motivo = as.character(motivo),
+      fuente_manual = as.character(fuente_manual),
+      activo = dplyr::coalesce(as.logical(activo), TRUE)
+    )
+}
+
 HOJAS_CATEGORIAS <- c(
   "Cercos", "Edificios", "Terrenos", "Estructuras y caños",
   "Eq de Oficina", "Maquinas y Equipos", "Maquinas Mejoras",
@@ -162,7 +181,11 @@ leer_inventario_categorias <- function(path_excel) {
 }
 
 leer_movimientos_sap <- function(path_sap) {
-  altas_raw <- readxl::read_excel(path_sap, sheet = "Altas") %>%
+  altas_excel <- readxl::read_excel(path_sap, sheet = "Altas")
+  bajas_excel <- readxl::read_excel(path_sap, sheet = "Bajas")
+  transf_excel <- readxl::read_excel(path_sap, sheet = "Transferencias")
+
+  altas_raw <- altas_excel %>%
     janitor::clean_names() %>%
     dplyr::rename(
       nro_activo = asset,
@@ -174,18 +197,20 @@ leer_movimientos_sap <- function(path_sap) {
     ) %>%
     dplyr::mutate(
       tipo_movimiento_sap = "alta",
+      nro_activo = normalizar_clave_activo(nro_activo),
       posting_date = parsear_fecha_ddmmyyyy(posting_date),
       cap_date_parsed = parsear_fecha_ddmmyyyy(cap_date),
       valor = as.numeric(valor),
       rubro = dplyr::recode(class, !!!CLASS_A_RUBRO, .default = NA_character_)
     ) %>%
     dplyr::filter(
+      es_fila_detalle_sap(nro_activo),
       !is.na(rubro),
       rubro != "Obras en curso",
       !grepl("^AS", nro_activo, ignore.case = TRUE)
     )
 
-  bajas_raw <- readxl::read_excel(path_sap, sheet = "Bajas") %>%
+  bajas_raw <- bajas_excel %>%
     janitor::clean_names() %>%
     dplyr::rename(
       nro_activo = asset,
@@ -197,6 +222,7 @@ leer_movimientos_sap <- function(path_sap) {
     ) %>%
     dplyr::mutate(
       tipo_movimiento_sap = "baja",
+      nro_activo = normalizar_clave_activo(nro_activo),
       posting_date = parsear_fecha_ddmmyyyy(posting_date),
       cap_date_parsed = parsear_fecha_ddmmyyyy(cap_date),
       valor = as.numeric(valor),
@@ -204,12 +230,13 @@ leer_movimientos_sap <- function(path_sap) {
       rubro = dplyr::recode(class, !!!CLASS_A_RUBRO, .default = NA_character_)
     ) %>%
     dplyr::filter(
+      es_fila_detalle_sap(nro_activo),
       !is.na(rubro),
       rubro != "Obras en curso",
       !grepl("^AS", nro_activo, ignore.case = TRUE)
     )
 
-  transf_raw <- readxl::read_excel(path_sap, sheet = "Transferencias") %>%
+  transf_raw <- transf_excel %>%
     janitor::clean_names() %>%
     dplyr::rename(
       nro_activo = asset,
@@ -221,6 +248,7 @@ leer_movimientos_sap <- function(path_sap) {
     ) %>%
     dplyr::mutate(
       tipo_movimiento_sap = "transferencia",
+      nro_activo = normalizar_clave_activo(nro_activo),
       posting_date = parsear_fecha_ddmmyyyy(posting_date),
       cap_date_parsed = parsear_fecha_ddmmyyyy(cap_date),
       valor = as.numeric(valor),
@@ -228,15 +256,26 @@ leer_movimientos_sap <- function(path_sap) {
       rubro = dplyr::recode(class, !!!CLASS_A_RUBRO, .default = NA_character_)
     ) %>%
     dplyr::filter(
+      es_fila_detalle_sap(nro_activo),
       !is.na(rubro),
       rubro != "Obras en curso",
       !grepl("^AS", nro_activo, ignore.case = TRUE)
     )
 
+  auditoria_movimientos <- tibble::tibble(
+    tipo_movimiento_sap = c("alta", "baja", "transferencia"),
+    filas_fuente = c(nrow(altas_excel), nrow(bajas_excel), nrow(transf_excel)),
+    filas_detalle = c(nrow(altas_raw), nrow(bajas_raw), nrow(transf_raw)),
+    filas_excluidas = filas_fuente - filas_detalle
+  ) %>%
+    dplyr::left_join(CONTEOS_MOVIMIENTOS_ESPERADOS, by = "tipo_movimiento_sap") %>%
+    dplyr::mutate(diferencia_conteo = filas_detalle - conteo_esperado)
+
   list(
     altas = altas_raw,
     bajas = bajas_raw,
-    transferencias = transf_raw
+    transferencias = transf_raw,
+    auditoria_movimientos = auditoria_movimientos
   )
 }
 
@@ -248,6 +287,7 @@ importar_datos <- function(path_excel_ly, inputs_dir = "inputs") {
   indices_ipim <- leer_indices_ipim(path_excel_ly)
   indices_ipc_bajas <- leer_indices_ipc_bajas(path_excel_ly)
   indices_ipim_bajas <- leer_indices_ipim_bajas(path_excel_ly)
+  excepciones_fecha_base <- leer_excepciones_fecha_base(rutas$parametros)
 
   archivos_sap <- list.files(rutas$sap, pattern = "\\.xlsx$", full.names = TRUE)
   archivos_sap <- archivos_sap[!grepl("^~\\$", basename(archivos_sap))]
@@ -258,7 +298,8 @@ importar_datos <- function(path_excel_ly, inputs_dir = "inputs") {
     movimientos <- list(
       altas = tibble::tibble(),
       bajas = tibble::tibble(),
-      transferencias = tibble::tibble()
+      transferencias = tibble::tibble(),
+      auditoria_movimientos = tibble::tibble()
     )
   }
 
@@ -268,8 +309,10 @@ importar_datos <- function(path_excel_ly, inputs_dir = "inputs") {
     indices_ipim       = indices_ipim,
     indices_ipc_bajas  = indices_ipc_bajas,
     indices_ipim_bajas = indices_ipim_bajas,
+    excepciones_fecha_base = excepciones_fecha_base,
     altas              = movimientos$altas,
     bajas              = movimientos$bajas,
-    transferencias     = movimientos$transferencias
+    transferencias     = movimientos$transferencias,
+    auditoria_movimientos = movimientos$auditoria_movimientos
   )
 }

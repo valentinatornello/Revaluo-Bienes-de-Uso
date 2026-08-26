@@ -10,15 +10,56 @@ library(lubridate)
 # Permitir archivos grandes (hasta 200 MB)
 options(shiny.maxRequestSize = 200 * 1024^2)
 
-# Cargar todas las funciones del proyecto
-source("R/utils.R")
-source("R/01_importar_datos.R")
-source("R/02_limpiar_datos.R")
-source("R/03_construir_rollforward.R")
-source("R/04_calculo_axi.R")
-source("R/05_prueba_global.R")
-source("R/06_validaciones.R")
-source("R/07_exportar_resultados.R")
+# Cargar el pipeline y exponer las operaciones usadas por la interfaz.
+pipeline_env <- new.env(parent = environment())
+for (script in c(
+  "R/utils.R",
+  "R/01_importar_datos.R",
+  "R/02_limpiar_datos.R",
+  "R/03_construir_rollforward.R",
+  "R/04_calculo_axi.R",
+  "R/05_prueba_global.R",
+  "R/06_validaciones.R",
+  "R/07_exportar_resultados.R"
+)) {
+  sys.source(script, envir = pipeline_env)
+}
+
+importar_datos <- function(path_excel_ly, inputs_dir = "inputs") {
+  pipeline_env$importar_datos(path_excel_ly, inputs_dir)
+}
+
+limpiar_datos <- function(datos, anio_ejercicio) {
+  pipeline_env$limpiar_datos(datos, anio_ejercicio)
+}
+
+construir_rollforward <- function(datos_limpios, anio_ejercicio) {
+  pipeline_env$construir_rollforward(datos_limpios, anio_ejercicio)
+}
+
+calcular_axi <- function(datos_rollforward, anio_ejercicio) {
+  pipeline_env$calcular_axi(datos_rollforward, anio_ejercicio)
+}
+
+generar_prueba_global <- function(datos_axi, anio_ejercicio) {
+  pipeline_env$generar_prueba_global(datos_axi, anio_ejercicio)
+}
+
+ejecutar_validaciones <- function(datos_pg) {
+  pipeline_env$ejecutar_validaciones(datos_pg)
+}
+
+exportar_excel_revaluo <- function(datos, ruta, anio_ejercicio) {
+  pipeline_env$exportar_excel_revaluo(datos, ruta, anio_ejercicio)
+}
+
+exportar_validaciones <- function(datos, ruta) {
+  pipeline_env$exportar_validaciones(datos, ruta)
+}
+
+exportar_resumen <- function(datos, ruta, anio_ejercicio) {
+  pipeline_env$exportar_resumen(datos, ruta, anio_ejercicio)
+}
 
 ANIO_EJERCICIO_DEFAULT <- as.integer(format(Sys.Date(), "%Y")) - 1L
 
@@ -216,6 +257,7 @@ ui <- fluidPage(
   )
 )
 
+# 
 # ─────────────────────────────────────────────
 #  SERVER
 # ─────────────────────────────────────────────

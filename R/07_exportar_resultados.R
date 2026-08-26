@@ -55,7 +55,10 @@ exportar_excel_revaluo <- function(datos, ruta, anio_ejercicio = 2022) {
         "trim_primer_anio", "vut_ly", "vut_ejercicio", "vut_cierre",
         "vu_restante", "amort_trimestre", "amort_hist_ejercicio",
         "amort_hist_2018", "amort_acum_cierre", "amort_acum_ly",
-        "amort_acum_ly_reexp", "vr", "coef_ipc", "coef_ipim",
+        "amort_acum_ly_reexp", "vr", "fecha_indice_reexp",
+        "regla_fecha_base_aplicada", "motivo_excepcion_fecha_base",
+        "valor_sap_original", "direccion_movimiento", "importe_movimiento_control",
+        "coef_ipc", "coef_ipim",
         "vo_reexp", "amort_hist_reexp", "amort_acum_cierre_reexp",
         "vr_reexp", "amort_bajas", "vr_bajas"),
       names(d)
