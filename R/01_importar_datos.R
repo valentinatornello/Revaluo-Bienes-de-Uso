@@ -227,13 +227,19 @@ leer_movimientos_sap <- function(path_sap) {
       cap_date_parsed = parsear_fecha_ddmmyyyy(cap_date),
       valor = as.numeric(valor),
       depr_retired = as.numeric(depr_retired),
+      ret_book_value = as.numeric(ret_book_value),
       rubro = dplyr::recode(class, !!!CLASS_A_RUBRO, .default = NA_character_)
     ) %>%
     dplyr::filter(
       es_fila_detalle_sap(nro_activo),
       !is.na(rubro),
       rubro != "Obras en curso",
-      !grepl("^AS", nro_activo, ignore.case = TRUE)
+      !grepl("^AS", nro_activo, ignore.case = TRUE),
+      # Ret. book value (col. M) = Retirement (col. K) + Depr. retired (col. L).
+      # Solo se reconoce la baja cuando el bien queda totalmente depreciado (M = 0).
+      # PENDIENTE: consultar con Pablo el tratamiento de las filas con M != 0
+      # (quedan excluidas del rollforward hasta esa definición).
+      abs(ret_book_value) < 0.01
     )
 
   transf_raw <- transf_excel %>%
