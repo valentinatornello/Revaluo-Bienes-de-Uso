@@ -1,17 +1,41 @@
-<<<<<<< HEAD
 # Revalúo de Bienes de Uso
+
+Proyecto para automatizar el cálculo del Revalúo de Bienes de Uso (Ajuste por Inflación Impositivo) de Monsanto/Bayer Argentina, reemplazando el proceso manual que realizaba el equipo de KPMG.
 
 ## Descripción
 
-Proyecto para automatizar el cálculo del Revalúo de Bienes de Uso de Monsanto/Bayer Argentina, reemplazando las tareas manuales realizadas sobre múltiples archivos Excel por un flujo reproducible desarrollado en R.
+**Contexto**: KPMG realizaba este cálculo anualmente sobre archivos Excel con ~56.000 activos distribuidos en 11 categorías. Al pasar KPMG a ser auditor de la compañía, ya no puede ejecutar esta tarea por conflicto de interés. Este proyecto internaliza el proceso con un flujo automatizado en R que produce el mismo output pero con mayor trazabilidad y menor riesgo de error.
 
-El proceso actual depende de la consolidación manual de información proveniente de SAP y de archivos históricos de trabajo, lo que implica un alto riesgo de errores, baja trazabilidad y una fuerte dependencia del conocimiento operativo de personas específicas. La solución propuesta busca transformar este esquema en un proceso estandarizado, transparente y auditable.
+La iniciativa está orientada a automatizar las cuentas de 2025 en adelante. Como etapa de validación, se utilizarán datos de 2022, 2023 y 2024 para comprobar si el modelo reproduce el mismo resultado obtenido previamente por el equipo de KPMG. Este proyecto surge porque ese equipo pasará a cumplir el rol de auditor y ya no podrá continuar ejecutando esta tarea operativa.
 
 ## Objetivo
 
 ### Objetivo general
 
-Centralizar la información de SAP y de los archivos históricos para ejecutar el revalúo de bienes de uso de forma estandarizada, transparente y auditable.
+Automatizar el cálculo del revalúo de bienes de uso para ejecutarlo de forma interna a partir del ejercicio 2025, produciendo un output equivalente al de KPMG pero más limpio y estructurado.
+
+### Estrategia de validación
+
+El modelo se valida contra los resultados históricos de KPMG para tres ejercicios consecutivos:
+
+| Ejercicio | Archivo KPMG | Estado |
+|---|---|---|
+| 2022 | `MARG - Revaluo AxI 2022_v_28.04.23 IPIM e IPC.xlsx` | En validación |
+| 2023 | Pendiente | Pendiente |
+| 2024 | Pendiente | Pendiente |
+
+Una vez que el modelo reproduzca los resultados de los tres ejercicios, se considerará validado para producción (2025+).
+
+### Output deseado
+
+El output final es un archivo Excel con la siguiente estructura:
+
+- **Detalle por categoría (Class)**: una hoja por rubro con el cálculo activo por activo
+- **Prueba Global por Class**: reconciliación individual por cada categoría
+- **Prueba Global Total**: consolidación de todas las categorías
+- **Amortizaciones globales**: resumen de amortización histórica y reexpresada
+- **Hojas de índices**: tablas IPC e IPIM utilizadas en el cálculo
+- **Resumen ejecutivo**: resultado del AXI por categoría
 
 ### Objetivos específicos
 
@@ -20,7 +44,9 @@ Centralizar la información de SAP y de los archivos históricos para ejecutar e
 - Reconstruir el inventario histórico de activos por rubro.
 - Aplicar los cálculos de ajuste por inflación y amortización según los criterios definidos.
 - Ejecutar validaciones automáticas que aseguren la consistencia de los resultados.
+- Validar el modelo contra los resultados históricos de 2022, 2023 y 2024 elaborados por KPMG.
 - Generar salidas aptas para revisión por los equipos de Impuestos y Contabilidad.
+- Replicar el output funcional esperado en Excel, con una presentación más limpia y ordenada.
 - Garantizar la trazabilidad completa de cada transformación y cálculo.
 
 ## Alcance
@@ -34,6 +60,11 @@ Centralizar la información de SAP y de los archivos históricos para ejecutar e
 - **Trazabilidad de cálculos**: registro de cada transformación aplicada, desde los datos originales hasta el resultado final.
 - **Exportación para revisión de Impuestos y Contabilidad**: generación de archivos de salida con el detalle necesario para el cierre y la auditoría.
 
+## Configuración del entorno
+
+1. Instalar `renv` si no está disponible: `install.packages("renv")`.
+2. Restaurar dependencias del proyecto: `renv::restore()`.
+
 ## Flujo del proceso
 
 1. **Recepción de insumos**: archivos del ejercicio y archivos históricos del período anterior.
@@ -41,8 +72,37 @@ Centralizar la información de SAP y de los archivos históricos para ejecutar e
 3. **Integración de movimientos**: incorporación de altas, bajas y transferencias.
 4. **Reconstrucción del inventario**: actualización del stock de bienes de uso por rubro.
 5. **Cálculos**: amortizaciones, actualizaciones, ajuste por inflación y Prueba Global.
-6. **Validación**: controles automáticos de consistencia antes de emitir resultados.
-7. **Exportación**: generación de archivos de salida para revisión y cierre.
+6. **Validación histórica**: contraste de los resultados del modelo contra los ejercicios 2022, 2023 y 2024 preparados por KPMG.
+7. **Validación**: controles automáticos de consistencia antes de emitir resultados.
+8. **Exportación**: generación de archivos de salida para revisión y cierre.
+
+## MARG – Reexp. de amortizaciones
+
+Partir de:
+
+- Archivo revalúo LY.
+- Archivo altas, bajas y transferencias FY que se liquida (archivo ABT), modificando previamente el formato de fechas de `.` a `/` (`find and select` → `replace`).
+
+En el archivo revalúo LY, rubro por rubro (class):
+
+1. **Incorporar altas y transferencias del FY** (surgen del archivo ABT). Importante: no modificar aún el año detallado en el recuadro, por el cálculo de las amortizaciones de las bajas que deben quedar a LY.
+2. **Tener en cuenta las fechas del archivo ABT**:
+   - **Altas**: considerar la fecha detallada en la columna `PSTNG date`.
+   - **Transferencias**: considerar la fecha detallada en la columna `CAP date`.
+3. **Extraer el resto de los datos**:
+   - **N° activo fijo**: `asset`.
+   - **Descripción**: `asset description`.
+   - **VO**: suma de `aquisition` / suma de `transfer`.
+   - **VU asignada**: se aclara para cada rubro en el archivo del revalúo (criterio de amortización año de alta).
+4. **Extraer las bajas** a partir de las detalladas por rubro en el archivo ABT (`vlookup` y control). Luego, cortar (filtrando y utilizando `find and select` → `go to special` → `visible cells only`) y copiar al final de ese rubro, pegando a valor para conservar los datos a LY. Controlar el resultado.
+5. **Detallar bajas no presentes en el archivo de revalúo**: si en el archivo ABT se informan bienes dados de baja que no están en el archivo del revalúo, igualmente deben detallarse al final del rubro con el número de `asset`.
+6. **Completar el resto de las columnas**, con especial atención en las columnas de altas y transferencias. En la columna `bienes que agotaron BU LY`, detallar los bienes que agotaron su vida útil el año anterior. Actualizar los índices de actualización (`IPIM` para altas hasta 2017, `IPC` para altas a partir de 2018). Aclaración: para el FY2023 se actualizaron únicamente las altas a partir de 2018.
+7. **Al finalizar cada rubro, realizar las pruebas globales**. La amortización al inicio corresponde al dato LY (amortización al cierre).
+
+## Configuración del entorno
+
+1. Instalar `renv` si no está disponible: `install.packages("renv")`.
+2. Restaurar dependencias del proyecto: `renv::restore()`.
 
 ## Entradas
 
@@ -50,7 +110,7 @@ Centralizar la información de SAP y de los archivos históricos para ejecutar e
 - Archivos de Altas, Bajas y Transferencias del ejercicio.
 - Archivo histórico de revalúo del período anterior.
 - Criterios de vida útil y amortización por rubro.
-- Índices y parámetros de actualización aplicables.
+- Índices y parámetros de actualización aplicables (IPC e IPIM).
 - Archivos auxiliares de validación y soporte.
 
 ## Salidas
@@ -58,20 +118,23 @@ Centralizar la información de SAP y de los archivos históricos para ejecutar e
 - Inventario reconstruido de bienes de uso.
 - Detalle de movimientos integrados al período.
 - Cálculo del revalúo y del ajuste por inflación.
-- Resultados de la Prueba Global.
+- Prueba Global separada por `class` y consolidada total.
+- Amortizaciones globales y demás cuadros de control necesarios para revisión.
 - Validaciones de consistencia.
-- Archivos exportables para revisión funcional.
+- Archivo Excel final con el mismo output funcional que KPMG, en un formato más limpio y ordenado.
 
 ## Estructura del repositorio
-revaluo-bienes-de-uso/ 
-├── data/ # Datos crudos, intermedios y procesados 
-├── inputs/ # Fuentes de entrada organizadas por tipo 
-├── outputs/ # Reportes, auditoría y archivo final de salida 
-├── R/ # Scripts del flujo de procesamiento 
-├── docs/ # Documentación funcional y metodológica 
-├── tests/ # Pruebas automatizadas 
-└── _targets.R # Definición del pipeline (targets)
 
+```text
+revaluo-bienes-de-uso/
+├── data/              # Datos crudos, intermedios y procesados
+├── inputs/            # Fuentes de entrada organizadas por tipo
+├── outputs/           # Reportes, auditoría y archivo final de salida
+├── R/                 # Scripts del flujo de procesamiento
+├── docs/              # Documentación funcional y metodológica
+├── tests/             # Pruebas automatizadas
+└── _targets.R         # Definición del pipeline (targets)
+```
 
 ### Descripción de directorios
 
@@ -89,45 +152,10 @@ revaluo-bienes-de-uso/
 - Reducción del tiempo operativo del proceso.
 - Disminución de errores por manipulación manual.
 - Reproducibilidad de los cálculos entre períodos.
-=======
-# Revaluo-Bienes-de-Uso
-Automatización del proceso de Revalúo de Bienes de Uso mediante R, consolidando información proveniente de SAP y archivos de trabajo históricos para generar cálculos trazables, reproducibles y auditables de ajuste por inflación y revalúo impositivo.
-
-## Objetivo
-
-Este proyecto tiene como objetivo automatizar el proceso de cálculo del Revalúo de Bienes de Uso utilizado por Monsanto/Bayer Argentina, reemplazando tareas manuales realizadas sobre múltiples archivos Excel por un flujo reproducible desarrollado en R.
-
-La solución busca centralizar la información proveniente de SAP y de los archivos históricos de trabajo, permitiendo ejecutar el proceso de manera estandarizada, transparente y auditable.
-
-## Alcance
-
-El modelo contempla:
-
-- Lectura y consolidación de archivos SAP.
-- Integración de movimientos de Altas, Bajas y Transferencias.
-- Reconstrucción del inventario histórico de activos.
-- Aplicación de cálculos de Ajuste por Inflación.
-- Generación de Prueba Global (PG).
-- Validaciones automáticas de consistencia.
-- Trazabilidad completa de cada cálculo realizado.
-## Configuración del entorno
-
-1. Instalar `renv` si no está disponible: `install.packages("renv")`.
-2. Restaurar dependencias del proyecto: `renv::restore()`.
-
-- Exportación de resultados para revisión por los equipos de Impuestos y Contabilidad.
-
-## Beneficios esperados
-
-- Reducción del tiempo operativo.
-- Disminución de errores manuales.
-- Reproducibilidad del proceso.
->>>>>>> origin/main
 - Menor dependencia de desarrollos externos.
 - Mayor capacidad de auditoría y revisión.
 - Conservación del conocimiento de negocio dentro de la organización.
 
-<<<<<<< HEAD
 ## Principios de diseño
 
 - **Reproducibilidad**: un mismo conjunto de entradas debe producir siempre el mismo resultado.
@@ -146,34 +174,23 @@ El modelo contempla:
 - **targets**: orquestación del pipeline y ejecución reproducible.
 - **renv**: gestión de dependencias y control del entorno.
 
-## Estado actual
-
-Fase inicial de diseño y modelado del flujo de automatización. Se encuentra en curso el relevamiento funcional del proceso, la identificación de reglas de negocio y la estructuración del pipeline técnico.
-
-=======
->>>>>>> origin/main
 ## Equipo
 
 - Pablo Fernández
 - Ricardo Molina
 - Valentina Tornello
 
-<<<<<<< HEAD
-
-
-=======
-## Tecnologías
-
-- R
-- tidyverse
-- readxl
-- openxlsx
-- janitor
-- lubridate
-- targets
-- renv
 
 ## Estado actual
 
-Fase inicial de diseño y modelado del flujo de automatización.
->>>>>>> origin/main
+Pipeline funcional ejecutando los 7 pasos del cálculo end-to-end con datos reales del ejercicio 2022:
+
+- **Importación**: lee las 11 hojas del Excel de KPMG + archivo SAP (Altas, Bajas, Transferencias)
+- **Limpieza**: normaliza ~65.000 filas, filtra IFRS16 y filas de control
+- **Rollforward**: integra movimientos del ejercicio con detección de duplicados
+- **Cálculo AXI**: amortización histórica + reexpresión IPC/IPIM por activo
+- **Prueba Global**: reconciliación por categoría (4/10 rubros con diferencia = 0)
+- **Validaciones**: consistencia interna perfecta (VR = VO - Amort Acum)
+- **Exportación**: genera 3 archivos Excel (resultado, validaciones, resumen)
+
+Próximos pasos: ajustar edge cases de la PG para las categorías restantes, validar contra ejercicios 2023 y 2024.
