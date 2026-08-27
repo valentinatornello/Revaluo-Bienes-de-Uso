@@ -68,6 +68,47 @@ normalizar_clave_activo <- function(x) {
   stringr::str_trim(as.character(x))
 }
 
+# minusculas, sin acentos ni puntuacion: permite comparar etiquetas de excel escritas de distinta forma
+normalizar_etiqueta <- function(x) {
+  x <- as.character(x)
+  x <- chartr("áéíóúàèìòùäëïöüâêîôûãõñçÁÉÍÓÚÀÈÌÒÙÄËÏÖÜÂÊÎÔÛÃÕÑÇ",
+              "aeiouaeiouaeiouaeiouaoncAEIOUAEIOUAEIOUAEIOUAONC", x)
+  x <- tolower(x)
+  x <- gsub("[^a-z0-9]+", " ", x)
+  trimws(x)
+}
+
+# equivalencias entre las etiquetas de rubro del manual externo (Price/KPMG) y las propias
+ALIAS_RUBROS <- c(
+  "cercos"                        = "Cercos",
+  "edificios"                     = "Edificios",
+  "terrenos"                      = "Terrenos",
+  "estructuras y canos"           = "Estructuras y ca\u00f1os",
+  "estructuras y canerias"        = "Estructuras y ca\u00f1os",
+  "eq de oficina"                 = "Eq de Oficina",
+  "equipo de oficina"             = "Eq de Oficina",
+  "equipos de oficina"            = "Eq de Oficina",
+  "maquinas y equipos"            = "Maquinas y Equipos",
+  "maquinarias y equipos"         = "Maquinas y Equipos",
+  "maquinas mejoras"              = "Maquinas Mejoras",
+  "mejoras maquinas"              = "Maquinas Mejoras",
+  "mejoras maquinas y equipos"    = "Maquinas Mejoras",
+  "mejoras de maquinas y equipos" = "Maquinas Mejoras",
+  "myu"                           = "MyU",
+  "muebles y utiles"              = "MyU",
+  "rodados"                       = "Rodados",
+  "terreno mejoras"               = "Terreno Mejoras",
+  "terrenos mejoras"              = "Terreno Mejoras",
+  "mejoras terrenos"              = "Terreno Mejoras",
+  "mejoras de terrenos"           = "Terreno Mejoras",
+  "software"                      = "Software"
+)
+
+# devuelve el nombre canonico de rubro para cada etiqueta, o NA si no corresponde a ningun rubro
+canonizar_rubro <- function(x) {
+  unname(ALIAS_RUBROS[normalizar_etiqueta(x)])
+}
+
 es_fila_detalle_sap <- function(nro_activo) {
   activo <- normalizar_clave_activo(nro_activo)
   !is.na(activo) &

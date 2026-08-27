@@ -91,6 +91,35 @@ resultado_color <- function(r) {
   )
 }
 
+# Valida y guarda un archivo subido; falla con un mensaje que indica cómo resolverlo.
+guardar_archivo_subido <- function(subido, dir_destino, etiqueta) {
+  extension <- tolower(tools::file_ext(subido$name))
+  if (extension != "xlsx") {
+    stop(sprintf(
+      paste0(
+        "%s: el archivo '%s' es .%s y solo se admite .xlsx. ",
+        "Abrilo en Excel y guardalo como \"Libro de Excel (*.xlsx)\" antes de subirlo."
+      ),
+      etiqueta, subido$name, extension
+    ), call. = FALSE)
+  }
+
+  dir.create(dir_destino, recursive = TRUE, showWarnings = FALSE)
+  destino <- file.path(dir_destino, basename(subido$name))
+  copiado <- suppressWarnings(file.copy(subido$datapath, destino, overwrite = TRUE))
+  if (!copiado || !file.exists(destino)) {
+    stop(sprintf(
+      paste0(
+        "%s: no se pudo guardar '%s' en '%s'. ",
+        "Cerrá el archivo si está abierto en Excel, verificá que OneDrive terminó de sincronizar ",
+        "y que tenés permisos de escritura sobre esa carpeta."
+      ),
+      etiqueta, basename(subido$name), dir_destino
+    ), call. = FALSE)
+  }
+  destino
+}
+
 # Construye tablas de referencia para la sección informativa de la UI.
 referencias_revaluo <- function() {
   # Define conceptos clave usados a lo largo del proceso de cálculo.
@@ -287,7 +316,7 @@ ui <- fluidPage(
           "ℹ La prueba global cuadra el saldo calculado (s/prueba) con el saldo del revalúo (s/revalúo) por rubro. ",
           "Las diferencias se colorean: ",
           tags$span(style = "color:green;font-weight:bold;", "verde"), " ≤ $1000 · ",
-          tags$span(style = "color:#9C5700;font-weight:bold;", "ámarillo"), " $1–$1000 · ",
+          tags$span(style = "color:#9C5700;font-weight:bold;", "ámarillo"), " $1000–$10000 · ",
           tags$span(style = "color:red;font-weight:bold;", "rojo"), " > $1000."
         ),
         uiOutput("paso5_ui")
@@ -471,13 +500,17 @@ server <- function(input, output, session) {
   # ── Copiar archivo SAP al cargar ────────────
   observeEvent(input$archivo_sap, { 
     req(input$archivo_sap)
-    dest_dir <- file.path("inputs", "SAP")
-    if (!dir.exists(dest_dir)) dir.create(dest_dir, recursive = TRUE)
-    dest_path <- file.path(dest_dir, basename(input$archivo_sap$name))
-    file.copy(input$archivo_sap$datapath, dest_path, overwrite = TRUE)
-    output$sap_status <- renderUI({
-      tags$p(style = "color:green; font-size:.85rem;",
-             paste0("✔ Copiado a inputs/SAP/", input$archivo_sap$name))
+    tryCatch({
+      guardar_archivo_subido(input$archivo_sap, file.path("inputs", "SAP"),
+                             "Archivo SAP (Altas/Bajas/Transferencias)")
+      output$sap_status <- renderUI({
+        tags$p(style = "color:green; font-size:.85rem;",
+               paste0("✔ Copiado a inputs/SAP/", input$archivo_sap$name))
+      })
+    }, error = function(e) {
+      output$sap_status <- renderUI({
+        tags$p(style = "color:red; font-size:.85rem;", conditionMessage(e))
+      })
     })
   })
 
@@ -489,7 +522,6 @@ server <- function(input, output, session) {
     estado$error_msg   <- NULL
     estado$archivos_output <- NULL
 
-    path_ly      <- input$archivo_ly$datapath
     anio         <- as.integer(input$anio_ejercicio)
 
     output$run_status <- renderUI(
@@ -497,9 +529,18 @@ server <- function(input, output, session) {
     )
 
     # Guardar LY en parametros para que las funciones lo encuentren
-    dir.create(file.path("inputs", "parametros"), recursive = TRUE, showWarnings = FALSE)
-    path_ly_dest <- file.path("inputs", "parametros", basename(input$archivo_ly$name))
-    file.copy(path_ly, path_ly_dest, overwrite = TRUE)
+    path_ly_dest <- tryCatch(
+      guardar_archivo_subido(input$archivo_ly, file.path("inputs", "parametros"),
+                             "Archivo del ejercicio anterior (LY)"),
+      error = function(e) {
+        estado$error_msg <- paste("Carga de archivos —", conditionMessage(e))
+        output$run_status <- renderUI(
+          tags$p(style = "color:red; font-size:.85rem;", estado$error_msg)
+        )
+        NULL
+      }
+    )
+    if (!is.null(estado$error_msg)) return()
 
     # ── Paso 1: importar ────────────────────
     tryCatch({
@@ -564,16 +605,18 @@ server <- function(input, output, session) {
     # ── Paso 6: validaciones ─────────────────
     pg_real <- NULL
     if (!is.null(input$archivo_real)) {
-      dir.create(file.path("inputs", "parametros"), recursive = TRUE, showWarnings = FALSE)
-      path_real_dest <- file.path("inputs", "parametros", basename(input$archivo_real$name))
-      copia_ok <- file.copy(input$archivo_real$datapath, path_real_dest, overwrite = TRUE)
       pg_real <- tryCatch({
-        if (!copia_ok || !file.exists(path_real_dest)) {
-          stop(sprintf("no se pudo copiar el archivo subido a '%s'", path_real_dest))
-        }
+        path_real_dest <- guardar_archivo_subido(
+          input$archivo_real, file.path("inputs", "parametros"),
+          "Archivo de validación externa (manual de Price/KPMG)"
+        )
         leer_pg_real(path_real_dest)
       }, error = function(e) {
-        estado$error_msg <- paste("Paso 6 — Error al leer archivo real (Price/KPMG):", e$message)
+        estado$error_msg <- paste(
+          "Paso 6 — No se pudo usar el archivo de validación externa:", conditionMessage(e),
+          "| Subí el manual de Price/KPMG del ejercicio (con hojas 'PG' y 'PG AXI'),",
+          "o dejá el campo vacío para omitir la comparación externa."
+        )
         output$run_status <- renderUI(
           tags$p(style = "color:red; font-size:.85rem;", estado$error_msg)
         )

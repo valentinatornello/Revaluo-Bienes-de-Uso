@@ -196,40 +196,82 @@ leer_inventario_categorias <- function(path_excel) {
   categorias
 }
 
-# lee las hojas PG / PG AXI del excel real (KPMG/Price) para validar contra el calculo propio
+# lee las hojas PG / PG AXI del excel real (KPMG/Price) para validar contra el calculo propio.
+# soporta dos layouts: el del manual (rubros como encabezados de columna, magnitud en fila fija)
+# y el tabular (columna 'rubro' + una columna por magnitud, como el export propio)
 leer_pg_real <- function(path_excel) {
   if (!file.exists(path_excel)) {
-    stop(sprintf("El archivo real '%s' no existe", path_excel))
+    stop(sprintf("el archivo '%s' no existe o no pudo guardarse", path_excel), call. = FALSE)
   }
 
   rubros <- PARAMETROS_RUBROS$rubro
-  cols <- 2:(length(rubros) + 1)
+  hojas_disponibles <- readxl::excel_sheets(path_excel)
 
-  extraer_fila <- function(hoja, fila) {
-    hojas_disponibles <- readxl::excel_sheets(path_excel)
+  leer_hoja <- function(hoja) {
     if (!hoja %in% hojas_disponibles) {
       stop(sprintf(
-        "El archivo real '%s' no tiene la hoja '%s' (hojas disponibles: %s)",
+        "el archivo '%s' no tiene la hoja '%s'; se necesitan las hojas 'PG' y 'PG AXI' (hojas encontradas: %s)",
         basename(path_excel), hoja, paste(hojas_disponibles, collapse = ", ")
-      ))
+      ), call. = FALSE)
     }
-    d <- readxl::read_excel(path_excel, sheet = hoja, col_names = FALSE, .name_repair = "minimal")
-    if (nrow(d) < fila || ncol(d) < max(cols)) {
-      stop(sprintf(
-        "El archivo real '%s', hoja '%s', no tiene la fila/columnas esperadas (fila %d, columnas hasta %d)",
-        basename(path_excel), hoja, fila, max(cols)
-      ))
-    }
-    valores <- as.numeric(unlist(d[fila, cols]))
-    valores[is.na(valores)] <- 0
+    readxl::read_excel(path_excel, sheet = hoja, col_names = FALSE, .name_repair = "minimal")
+  }
+
+  # celda vacia de un rubro presente = 0; rubro ausente en el archivo = NA (se reporta como advertencia)
+  a_numerico <- function(x, pos) {
+    valores <- suppressWarnings(as.numeric(x[pos]))
+    valores[!is.na(pos) & is.na(valores)] <- 0
     stats::setNames(valores, rubros)
   }
 
-  vr_revaluo <- extraer_fila("PG", 35)
-  vr_revaluo_reexp <- extraer_fila("PG AXI", 36)
+  ubicar_rubros_en_columnas <- function(d) {
+    for (i in seq_len(nrow(d))) {
+      pos <- match(rubros, canonizar_rubro(unlist(d[i, ], use.names = FALSE)))
+      if (sum(!is.na(pos)) >= length(rubros) / 2) {
+        return(pos)
+      }
+    }
+    NULL
+  }
+
+  extraer_serie_tabular <- function(d, magnitud) {
+    objetivo <- normalizar_etiqueta(magnitud)
+    for (i in seq_len(max(nrow(d) - 1L, 0L))) {
+      encabezado <- normalizar_etiqueta(unlist(d[i, ], use.names = FALSE))
+      col_valor <- match(objetivo, encabezado)
+      col_rubro <- match("rubro", encabezado)
+      if (is.na(col_valor) || is.na(col_rubro)) next
+      cuerpo <- d[seq(i + 1L, nrow(d)), , drop = FALSE]
+      pos <- match(rubros, canonizar_rubro(cuerpo[[col_rubro]]))
+      if (all(is.na(pos))) next
+      return(a_numerico(cuerpo[[col_valor]], pos))
+    }
+    NULL
+  }
+
+  extraer_serie <- function(hoja, fila, magnitud) {
+    d <- leer_hoja(hoja)
+    cols <- ubicar_rubros_en_columnas(d)
+    if (!is.null(cols) && nrow(d) >= fila) {
+      return(a_numerico(unlist(d[fila, ], use.names = FALSE), cols))
+    }
+    serie <- extraer_serie_tabular(d, magnitud)
+    if (!is.null(serie)) return(serie)
+    stop(sprintf(
+      paste0(
+        "en el archivo '%s' no se reconoce el formato de la hoja '%s' (%d filas x %d columnas): ",
+        "se esperaban los rubros como encabezados de columna con los valores en la fila %d, ",
+        "o una columna 'rubro' junto a una columna '%s'"
+      ),
+      basename(path_excel), hoja, nrow(d), ncol(d), fila, magnitud
+    ), call. = FALSE)
+  }
+
+  vr_revaluo <- extraer_serie("PG", 35, "vr_revaluo")
+  vr_revaluo_reexp <- extraer_serie("PG AXI", 36, "vr_reexp")
 
   list(
-    amort_revaluo = extraer_fila("PG", 19),
+    amort_revaluo = extraer_serie("PG", 19, "amort_revaluo"),
     vr_revaluo = vr_revaluo,
     axi_resultado = vr_revaluo_reexp - vr_revaluo
   )
