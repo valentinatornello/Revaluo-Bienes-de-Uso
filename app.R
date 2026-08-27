@@ -10,7 +10,7 @@ library(lubridate)
 # Permitir archivos grandes (hasta 200 MB)
 options(shiny.maxRequestSize = 200 * 1024^2)
 
-# Cargar el pipeline y exponer las operaciones usadas por la interfaz.
+# Cargar el pipeline/workflow y exponer los cálculos usados por la interfaz
 pipeline_env <- new.env(parent = environment())
 for (script in c(
   "R/utils.R",
@@ -317,7 +317,7 @@ ui <- fluidPage(
           "Las diferencias se colorean: ",
           tags$span(style = "color:green;font-weight:bold;", "verde"), " ≤ $1000 · ",
           tags$span(style = "color:#9C5700;font-weight:bold;", "ámarillo"), " $1000–$10000 · ",
-          tags$span(style = "color:red;font-weight:bold;", "rojo"), " > $1000."
+          tags$span(style = "color:red;font-weight:bold;", "rojo"), " > $10000."
         ),
         uiOutput("paso5_ui")
       ),
@@ -334,9 +334,9 @@ ui <- fluidPage(
           ),
           tags$p(style = "margin:6px 0 0 0;",
             tags$b("Tolerancias — Prueba Global:"),
-            " diferencia < $1000 = OK · $1–$1000 = ",
+            " diferencia < $1000 = OK · $1000–$10000 = ",
             tags$span(class = "badge-warn", "ADVERTENCIA"),
-            " · > $1000 = ",
+            " · > $10000 = ",
             tags$span(class = "badge-error", "ERROR"),
             ". Las advertencias de poca magnitud pueden ser producto de redondeo y deben revisarse manualmente."
           )
@@ -906,4 +906,3 @@ server <- function(input, output, session) {
 
 # ─────────────────────────────────────────────
 shinyApp(ui, server)
-

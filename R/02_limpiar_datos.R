@@ -84,11 +84,12 @@ normalizar_hoja_categoria <- function(datos, rubro, anio_ejercicio) {
     NA_real_
   }
 
-  vu_trim_rubro <- obtener_vu_trimestres(rubro)
+  vu_rubro <- obtener_vu_asignada(rubro)
   resultado$vu_asignada <- if (!is.na(idx_vu_asig)) {
-    as.numeric(datos[[idx_vu_asig]])
+    vu_archivo <- as.numeric(datos[[idx_vu_asig]])
+    if (rubro == "Edificios") vu_archivo else vu_archivo / 4
   } else {
-    vu_trim_rubro
+    vu_rubro
   }
 
   resultado$vut_ly <- if (!is.na(idx_vut_ly)) {

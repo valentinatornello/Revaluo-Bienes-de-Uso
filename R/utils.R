@@ -196,6 +196,21 @@ obtener_vu_trimestres <- function(rubro) {
   ifelse(is.na(match_idx), NA_real_, PARAMETROS_RUBROS$vu_trimestres[match_idx])
 }
 
+obtener_vu_asignada <- function(rubro) {
+  match_idx <- match(rubro, PARAMETROS_RUBROS$rubro)
+  if (is.na(match_idx)) return(NA_real_)
+
+  if (rubro == "Edificios") {
+    PARAMETROS_RUBROS$vu_trimestres[match_idx]
+  } else {
+    PARAMETROS_RUBROS$vu_anios[match_idx]
+  }
+}
+
+obtener_periodos_por_anio <- function(rubro) {
+  ifelse(rubro == "Edificios", 4L, 1L)
+}
+
 es_terreno <- function(rubro) {
   rubro == "Terrenos"
 }

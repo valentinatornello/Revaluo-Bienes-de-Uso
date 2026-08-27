@@ -2,6 +2,69 @@ library(tidyverse)
 
 source("R/utils.R")
 source("R/03_construir_rollforward.R")
+source("R/04_calculo_axi.R")
+
+stopifnot(obtener_vu_asignada("Edificios") == 200)
+stopifnot(obtener_vu_asignada("Rodados") == 5)
+stopifnot(obtener_periodos_por_anio("Edificios") == 4)
+stopifnot(obtener_periodos_por_anio("Rodados") == 1)
+
+indices_prueba <- tibble::tibble(fecha = as.Date("2022-01-01"), coeficiente = 1)
+activo_prueba <- tibble::tibble(
+  rubro = c("Edificios", "Rodados"),
+  nro_activo_fijo = c("E1", "R1"),
+  fecha_alta = as.Date(c("2023-01-01", "2023-01-01")),
+  anio_alta = 2023L,
+  mes_alta = 1L,
+  vo = 100,
+  vu_asignada = c(200, 5),
+  vut_ly = 0,
+  tipo_movimiento_calc = "historico"
+)
+resultado_edificios <- calcular_rubro_amortizable(
+  activo_prueba[1, ], "Edificios", indices_prueba, indices_prueba,
+  indices_prueba, indices_prueba, 2023
+)
+resultado_rodados <- calcular_rubro_amortizable(
+  activo_prueba[2, ], "Rodados", indices_prueba, indices_prueba,
+  indices_prueba, indices_prueba, 2023
+)
+stopifnot(resultado_edificios$vut_ejercicio == 4)
+stopifnot(resultado_edificios$amort_hist_ejercicio == 2)
+stopifnot(resultado_rodados$vut_ejercicio == 1)
+stopifnot(resultado_rodados$amort_hist_ejercicio == 20)
+
+activo_alta_parcial <- activo_prueba %>%
+  dplyr::mutate(
+    fecha_alta = as.Date("2023-04-01"),
+    mes_alta = 4L
+  )
+resultado_edificios_parcial <- calcular_rubro_amortizable(
+  activo_alta_parcial[1, ], "Edificios", indices_prueba, indices_prueba,
+  indices_prueba, indices_prueba, 2023
+)
+resultado_rodados_parcial <- calcular_rubro_amortizable(
+  activo_alta_parcial[2, ], "Rodados", indices_prueba, indices_prueba,
+  indices_prueba, indices_prueba, 2023
+)
+stopifnot(resultado_edificios_parcial$vut_ejercicio == 3)
+stopifnot(resultado_edificios_parcial$amort_hist_ejercicio == 1.5)
+stopifnot(resultado_rodados_parcial$vut_ejercicio == 1)
+stopifnot(resultado_rodados_parcial$amort_hist_ejercicio == 20)
+
+movimiento_rodados <- tibble::tibble(
+  nro_activo = "R-SAP",
+  descripcion = "Rodado de prueba",
+  posting_date = as.Date("2023-04-01"),
+  cap_date_parsed = as.Date("2023-04-01"),
+  valor = 100
+)
+alta_rodados <- normalizar_movimiento_sap(
+  movimiento_rodados, "Rodados", "alta", 2023
+)
+baja_rodados <- normalizar_baja_sap(movimiento_rodados, "Rodados", 2023)
+stopifnot(alta_rodados$vu_asignada == 5)
+stopifnot(baja_rodados$vu_asignada == 5)
 
 inv <- tibble::tibble(
   rubro = c("Edificios", "Edificios"),
@@ -36,6 +99,7 @@ datos_rollforward <- list(
     Edificios = tibble::tibble(
       rubro = "Edificios",
       tipo_movimiento = "historico",
+      subclasificacion_historico = NA_character_,
       anio_movimiento = NA_integer_,
       nro_activo_fijo = "H1",
       descripcion = "Hist",

@@ -107,7 +107,7 @@ construir_rollforward <- function(datos_limpios, anio_ejercicio = 2022) {
 }
 
 normalizar_movimiento_sap <- function(mov, rubro_nombre, tipo, anio_ejercicio) {
-  vu_trim <- obtener_vu_trimestres(rubro_nombre)
+  vu_asignada <- obtener_vu_asignada(rubro_nombre)
 
   fecha_ref <- if (tipo == "transferencia") mov$cap_date_parsed 
   else mov$posting_date
@@ -130,7 +130,7 @@ normalizar_movimiento_sap <- function(mov, rubro_nombre, tipo, anio_ejercicio) {
       TRUE ~ tipo
     ),
     importe_movimiento_control = if (tipo == "alta") abs(mov$valor) else mov$valor,
-    vu_asignada = vu_trim,
+    vu_asignada = vu_asignada,
     vut_ly = NA_real_,
     anio_movimiento = anio_ejercicio,
     origen = paste0(tipo, "_", anio_ejercicio)
@@ -138,7 +138,7 @@ normalizar_movimiento_sap <- function(mov, rubro_nombre, tipo, anio_ejercicio) {
 }
 
 normalizar_baja_sap <- function(bajas, rubro_nombre, anio_ejercicio) {
-  vu_trim <- obtener_vu_trimestres(rubro_nombre)
+  vu_asignada <- obtener_vu_asignada(rubro_nombre)
 
   tibble::tibble(
     rubro = rubro_nombre,
@@ -154,7 +154,7 @@ normalizar_baja_sap <- function(bajas, rubro_nombre, anio_ejercicio) {
     valor_sap_original = bajas$valor,
     direccion_movimiento = "salida",
     importe_movimiento_control = -abs(bajas$valor),
-    vu_asignada = vu_trim,
+    vu_asignada = vu_asignada,
     vut_ly = NA_real_,
     anio_movimiento = anio_ejercicio,
     origen = paste0("baja_", anio_ejercicio)

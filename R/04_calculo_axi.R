@@ -26,7 +26,7 @@ calcular_axi <- function(datos_rollforward, anio_ejercicio = 2022) {
       )
     } else {
       inv <- calcular_rubro_amortizable(
-        inv, indices_ipc, indices_ipim,
+        inv, rubro_nombre, indices_ipc, indices_ipim,
         indices_ipc_bajas, indices_ipim_bajas,
         anio_ejercicio, excepciones_fecha_base
       )
@@ -39,10 +39,12 @@ calcular_axi <- function(datos_rollforward, anio_ejercicio = 2022) {
   datos_rollforward
 }
 
-calcular_rubro_amortizable <- function(inv, indices_ipc, indices_ipim,
+calcular_rubro_amortizable <- function(inv, rubro_nombre, indices_ipc, indices_ipim,
                                         indices_ipc_bajas, indices_ipim_bajas,
                                         anio_ejercicio,
                                         excepciones_fecha_base = SCHEMA_EXCEPCIONES_FECHA_BASE) {
+  periodos_por_anio <- obtener_periodos_por_anio(rubro_nombre)
+
   # Normaliza nulos para poder calcular en forma consistente (VO, VU, año y mes de alta).
   inv <- inv %>%
     dplyr::mutate(
@@ -56,17 +58,27 @@ calcular_rubro_amortizable <- function(inv, indices_ipc, indices_ipim,
 
   inv <- inv %>%
     dplyr::mutate(
-      # Calcula trimestres amortizables del primer año según mes de alta.
-      trim_primer_anio = calcular_trimestres_primer_anio(mes_alta),
+      # Edificios devenga por trimestre; los otros rubros, por año.
+      trim_primer_anio = dplyr::if_else(
+        periodos_por_anio == 4L,
+        calcular_trimestres_primer_anio(mes_alta),
+        1L
+      ),
 
       vut_ly = dplyr::if_else(
         !is.na(vut_ly),
         vut_ly,
-        calcular_vut_ly(anio_alta, mes_alta, anio_ejercicio, vu_asignada)
+        calcular_vut_ly(anio_alta, mes_alta, anio_ejercicio, vu_asignada) /
+          4L * periodos_por_anio
       ),
 
-      vut_ejercicio = calcular_vut_ejercicio(
-        anio_alta, mes_alta, anio_ejercicio, vu_asignada, vut_ly
+      vut_ejercicio = pmin(
+        dplyr::if_else(
+          anio_alta == anio_ejercicio,
+          trim_primer_anio,
+          periodos_por_anio
+        ),
+        vu_asignada - vut_ly
       ),
 
       vut_cierre = pmin(vut_ly + vut_ejercicio, vu_asignada),
@@ -158,8 +170,8 @@ calcular_rubro_amortizable <- function(inv, indices_ipc, indices_ipim,
         es_vu_agotada_ly,
         -amort_trimestre * dplyr::if_else(
           anio_alta == anio_ejercicio,
-          calcular_trimestres_primer_anio(mes_alta),
-          pmin(4, vu_asignada - vut_ly + 4)
+          trim_primer_anio,
+          pmin(periodos_por_anio, vu_asignada - vut_ly + periodos_por_anio)
         ),
         0
       )

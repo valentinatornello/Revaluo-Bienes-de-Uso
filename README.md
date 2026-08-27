@@ -76,6 +76,14 @@ El output final es un archivo Excel con la siguiente estructura:
 7. **Validación**: controles automáticos de consistencia antes de emitir resultados.
 8. **Exportación**: generación de archivos de salida para revisión y cierre.
 
+### Periodicidad de amortización
+
+- **Edificios**: la vida útil y la amortización se calculan por trimestres. Para el año de alta se consideran los trimestres devengados según el mes de incorporación.
+- **Resto de los rubros amortizables**: la vida útil y la amortización se calculan por años; se devenga un período anual por ejercicio, sujeto a la vida útil restante.
+- **Terrenos**: no se amortizan.
+
+La columna técnica `amort_trimestre` se mantiene en los archivos de salida para conservar compatibilidad con los modelos previos; para rubros distintos de Edificios contiene el importe de amortización anual.
+
 ## MARG – Reexp. de amortizaciones
 
 Partir de:
