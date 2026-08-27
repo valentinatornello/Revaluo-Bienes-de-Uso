@@ -1,5 +1,6 @@
 COLUMNAS_ESTANDAR <- c(
-  "tipo_movimiento", "nro_activo_fijo", "descripcion",
+  "tipo_movimiento", "tipo_movimiento_calc", "subclasificacion_historico",
+  "nro_activo_fijo", "descripcion",
   "anio_archivo", "fecha_alta", "anio_alta", "mes_alta",
   "vo", "vu_asignada", "vut_ly", "vut_ejercicio", "vut_cierre",
   "vu_restante", "rubro"
@@ -23,8 +24,27 @@ normalizar_hoja_categoria <- function(datos, rubro, anio_ejercicio) {
   n <- nrow(datos)
   resultado <- tibble::tibble(rubro = rep(rubro, n))
 
-  resultado$tipo_movimiento <- detectar_tipo_movimiento(datos, rubro)
+  # tipo_movimiento_calc conserva la clasificacion original detectada en la hoja (uso interno de calculo,
+  # p.ej. congelar amortizacion de bajas sin importar el anio en que ocurrieron).
+  resultado$tipo_movimiento_calc <- detectar_tipo_movimiento(datos, rubro)
   resultado$anio_movimiento <- extraer_anio_movimiento(datos)
+
+  # tipo_movimiento (para tabla/exportacion): todo lo que viene del excel LY y no es del
+  # ejercicio actual se identifica como "historico"; altas/bajas/transferencias solo se
+  # muestran como tales cuando corresponden al anio_ejercicio en curso.
+  es_movimiento_clasificado <- resultado$tipo_movimiento_calc %in% c("alta", "transferencia", "baja", "alta_y_baja")
+  es_del_ejercicio_actual <- !is.na(resultado$anio_movimiento) & resultado$anio_movimiento == anio_ejercicio
+
+  resultado$tipo_movimiento <- dplyr::if_else(
+    es_movimiento_clasificado & !es_del_ejercicio_actual,
+    "historico",
+    resultado$tipo_movimiento_calc
+  )
+  resultado$subclasificacion_historico <- dplyr::if_else(
+    es_movimiento_clasificado & !es_del_ejercicio_actual,
+    resultado$tipo_movimiento_calc,
+    NA_character_
+  )
 
   resultado$nro_activo_fijo <- if (!is.na(idx_nro)) {
     as.character(datos[[idx_nro]])

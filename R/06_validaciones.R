@@ -1,4 +1,4 @@
-ejecutar_validaciones <- function(datos_pg) {
+ejecutar_validaciones <- function(datos_pg, pg_real = NULL, tolerancia_externa = TOLERANCIA_VALIDACION_EXTERNA) {
   resultado_axi <- datos_pg$resultado_axi
   prueba_global <- datos_pg$prueba_global
 
@@ -9,6 +9,7 @@ ejecutar_validaciones <- function(datos_pg) {
   val_movimientos <- validar_conteos_movimientos(datos_pg$auditoria_movimientos)
   val_valores_negativos <- validar_valores_reexpresados_negativos(resultado_axi)
   val_excepciones_fecha <- validar_excepciones_fecha_base(resultado_axi)
+  val_contra_real <- validar_contra_real(prueba_global, pg_real, tolerancia_externa)
 
   todas <- dplyr::bind_rows(
     val_internas,
@@ -17,7 +18,8 @@ ejecutar_validaciones <- function(datos_pg) {
     val_vr_formula,
     val_movimientos,
     val_valores_negativos,
-    val_excepciones_fecha
+    val_excepciones_fecha,
+    val_contra_real
   )
 
   errores <- todas %>% dplyr::filter(resultado == "ERROR")
@@ -154,6 +156,100 @@ validar_pg_valor_residual <- function(pg_vr) {
   }
 }
 
+validar_contra_real <- function(prueba_global, pg_real, tolerancia_pct = TOLERANCIA_VALIDACION_EXTERNA) {
+  if (is.null(pg_real)) {
+    return(tibble::tibble(
+      tipo = "comparacion_real",
+      rubro = "TODOS",
+      descripcion = "No se proporciono archivo real (Price/KPMG) para comparar; validacion externa omitida",
+      resultado = "ADVERTENCIA",
+      valor = NA_real_
+    ))
+  }
+
+  obtener_valor <- function(valores, nombre) {
+    if (nombre %in% names(valores)) valores[[nombre]] else NA_real_
+  }
+
+  comparar_magnitud <- function(nombre_magnitud, propio_named, real_named) {
+    rubros <- names(real_named)
+
+    filas_rubro <- purrr::map_dfr(rubros, function(r) {
+      propio <- obtener_valor(propio_named, r)
+      real <- obtener_valor(real_named, r)
+      diferencia <- propio - real
+
+      if (is.na(propio) || is.na(real)) {
+        return(tibble::tibble(
+          tipo = paste0("comparacion_real_", nombre_magnitud),
+          rubro = r,
+          descripcion = sprintf(
+            "%s [%s]: sin datos suficientes para comparar (propio=%s, Price=%s)",
+            nombre_magnitud, r,
+            ifelse(is.na(propio), "NA", sprintf("%.0f", propio)),
+            ifelse(is.na(real), "NA", sprintf("%.0f", real))
+          ),
+          resultado = "ADVERTENCIA",
+          valor = NA_real_
+        ))
+      }
+
+      pct <- if (abs(real) > TOLERANCIA_CONSISTENCIA_INTERNA) {
+        abs(diferencia) / abs(real)
+      } else if (abs(diferencia) <= TOLERANCIA_CONSISTENCIA_INTERNA) {
+        0
+      } else {
+        1
+      }
+
+      tibble::tibble(
+        tipo = paste0("comparacion_real_", nombre_magnitud),
+        rubro = r,
+        descripcion = sprintf(
+          "%s [%s]: propio=%.0f | Price=%.0f | dif=%.0f | %.1f%% de diferencia (tolerancia %.0f%%, %.1f%% de igualdad)",
+          nombre_magnitud, r, propio, real, diferencia, pct * 100, tolerancia_pct * 100, (1 - pct) * 100
+        ),
+        resultado = ifelse(pct <= tolerancia_pct, "OK", "ERROR"),
+        valor = pct
+      )
+    })
+
+    propio_total <- sum(propio_named[rubros], na.rm = TRUE)
+    real_total <- sum(real_named, na.rm = TRUE)
+    diferencia_total <- propio_total - real_total
+    pct_total <- if (abs(real_total) > TOLERANCIA_CONSISTENCIA_INTERNA) {
+      abs(diferencia_total) / abs(real_total)
+    } else if (abs(diferencia_total) <= TOLERANCIA_CONSISTENCIA_INTERNA) {
+      0
+    } else {
+      1
+    }
+
+    fila_total <- tibble::tibble(
+      tipo = paste0("comparacion_real_", nombre_magnitud),
+      rubro = "TOTAL",
+      descripcion = sprintf(
+        "%s [TOTAL]: propio=%.0f | Price=%.0f | dif=%.0f | %.1f%% de diferencia (tolerancia %.0f%%, %.1f%% de igualdad)",
+        nombre_magnitud, propio_total, real_total, diferencia_total, pct_total * 100, tolerancia_pct * 100, (1 - pct_total) * 100
+      ),
+      resultado = ifelse(pct_total <= tolerancia_pct, "OK", "ERROR"),
+      valor = pct_total
+    )
+
+    dplyr::bind_rows(filas_rubro, fila_total)
+  }
+
+  amort_propio <- stats::setNames(prueba_global$amortizaciones$amort_revaluo, prueba_global$amortizaciones$rubro)
+  vr_propio <- stats::setNames(prueba_global$valor_residual$vr_revaluo, prueba_global$valor_residual$rubro)
+  axi_propio <- stats::setNames(prueba_global$axi$axi_resultado, prueba_global$axi$rubro)
+
+  dplyr::bind_rows(
+    comparar_magnitud("Amortizacion", amort_propio, pg_real$amort_revaluo),
+    comparar_magnitud("Valor Residual", vr_propio, pg_real$vr_revaluo),
+    comparar_magnitud("AXI", axi_propio, pg_real$axi_resultado)
+  )
+}
+
 validar_vr_formula <- function(resultado_axi) {
   validaciones <- list()
   tolerancia <- TOLERANCIA_CONSISTENCIA_INTERNA
@@ -246,7 +342,7 @@ validar_valores_reexpresados_negativos <- function(resultado_axi) {
 
     negativos <- d %>%
       dplyr::filter(
-        tipo_movimiento != "transferencia" | is.na(direccion_movimiento) | direccion_movimiento != "salida",
+        tipo_movimiento_calc != "transferencia" | is.na(direccion_movimiento) | direccion_movimiento != "salida",
         vo_reexp < 0 | vr_reexp < 0
       )
 

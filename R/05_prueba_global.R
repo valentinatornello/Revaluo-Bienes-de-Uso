@@ -23,7 +23,7 @@ generar_pg_amortizaciones <- function(resultado_axi, anio_ejercicio = 2022) {
     !is.na(d$anio_movimiento) & d$anio_movimiento == anio_ejercicio
   }
   es_existente <- function(d) {
-    !es_mov_actual(d) & d$tipo_movimiento != "baja"
+    !es_mov_actual(d) & d$tipo_movimiento_calc != "baja"
   }
 
   pg$amort_inicio <- vapply(rubros, function(r) {
@@ -88,7 +88,7 @@ generar_pg_valor_residual <- function(resultado_axi, anio_ejercicio = 2022) {
     !is.na(d$anio_movimiento) & d$anio_movimiento == anio_ejercicio
   }
   es_existente <- function(d) {
-    !es_mov_actual(d) & d$tipo_movimiento != "baja"
+    !es_mov_actual(d) & d$tipo_movimiento_calc != "baja"
   }
 
   pg$vr_inicio <- vapply(rubros, function(r) {

@@ -22,14 +22,14 @@ construir_rollforward <- function(datos_limpios, anio_ejercicio = 2022) {
 
     inv_rubro <- inv_rubro %>%
       dplyr::mutate(origen = dplyr::case_when(
-        tipo_movimiento == "alta"          ~ paste0("alta_", 
-        dplyr::coalesce(as.integer(anio_movimiento), anio_alta)),
-        tipo_movimiento == "transferencia" ~ paste0("transferencia_", 
-        dplyr::coalesce(as.integer(anio_movimiento), anio_alta)),
-        tipo_movimiento == "baja"          ~ paste0("baja_", 
-        dplyr::coalesce(as.integer(anio_movimiento), anio_alta)),
-        tipo_movimiento == "alta_y_baja"   ~ paste0("alta_y_baja_", 
-        dplyr::coalesce(as.integer(anio_movimiento), anio_alta)),
+        tipo_movimiento == "alta"          ~ paste0("alta_", anio_ejercicio),
+        tipo_movimiento == "transferencia" ~ paste0("transferencia_", anio_ejercicio),
+        tipo_movimiento == "baja"          ~ paste0("baja_", anio_ejercicio),
+        tipo_movimiento == "alta_y_baja"   ~ paste0("alta_y_baja_", anio_ejercicio),
+        !is.na(subclasificacion_historico) ~ paste0(
+          "historico_", subclasificacion_historico, "_",
+          dplyr::coalesce(as.integer(anio_movimiento), anio_alta)
+        ),
         TRUE                               ~ "historico"
       ))
 
@@ -115,6 +115,8 @@ normalizar_movimiento_sap <- function(mov, rubro_nombre, tipo, anio_ejercicio) {
   tibble::tibble(
     rubro = rubro_nombre,
     tipo_movimiento = tipo,
+    tipo_movimiento_calc = tipo,
+    subclasificacion_historico = NA_character_,
     nro_activo_fijo = as.character(mov$nro_activo),
     descripcion = as.character(mov$descripcion),
     fecha_alta = fecha_ref,
@@ -141,6 +143,8 @@ normalizar_baja_sap <- function(bajas, rubro_nombre, anio_ejercicio) {
   tibble::tibble(
     rubro = rubro_nombre,
     tipo_movimiento = "baja",
+    tipo_movimiento_calc = "baja",
+    subclasificacion_historico = NA_character_,
     nro_activo_fijo = as.character(bajas$nro_activo),
     descripcion = as.character(bajas$descripcion),
     fecha_alta = bajas$posting_date,

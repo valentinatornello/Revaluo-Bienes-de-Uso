@@ -22,7 +22,11 @@ list(
   tar_target(inventario, construir_rollforward(datos_limpios, ANIO_EJERCICIO)),
   tar_target(axi, calcular_axi(inventario, ANIO_EJERCICIO)),
   tar_target(prueba_global, generar_prueba_global(axi, ANIO_EJERCICIO)),
-  tar_target(validacion, ejecutar_validaciones(prueba_global)),
+  tar_target(pg_real, {
+    path_real <- buscar_archivo_real(ANIO_EJERCICIO)
+    if (!is.na(path_real)) leer_pg_real(path_real) else NULL
+  }),
+  tar_target(validacion, ejecutar_validaciones(prueba_global, pg_real)),
   tar_target(
     resultados_exportados,
     if (isTRUE(validacion$validacion$consistente)) {

@@ -69,6 +69,22 @@ parsear_fecha_ddmmyyyy <- function(x) {
   as.Date(x, format = "%d.%m.%Y")
 }
 
+# parsea fechas de las hojas de indices, tolerando filas de encabezado/placeholder
+# y seriales de Excel guardados como texto (ej. "43101") sin romper el vector entero
+parsear_fecha_indice <- function(x) {
+  if (inherits(x, c("Date", "POSIXct"))) return(as.Date(x))
+  if (is.numeric(x)) return(as.Date(x, origin = "1899-12-30"))
+
+  convertir_uno <- function(v) {
+    if (is.na(v)) return(as.Date(NA))
+    numerico <- suppressWarnings(as.numeric(v))
+    if (!is.na(numerico)) return(as.Date(numerico, origin = "1899-12-30"))
+    tryCatch(as.Date(as.character(v)), error = function(e) as.Date(NA))
+  }
+
+  do.call(c, lapply(x, convertir_uno))
+}
+
 leer_hoja_categoria <- function(path_excel, hoja, config_hoja = NULL) {
   if (is.null(config_hoja)) {
     config_hoja <- FILAS_HEADER[[hoja]]
@@ -115,7 +131,7 @@ leer_indices_ipim <- function(path_excel) {
     dplyr::select(1:4) %>%
     dplyr::rename(fecha = 1, ipim_periodo = 2, ipim_actual = 3, coeficiente = 4) %>%
     dplyr::mutate(
-      fecha = as.Date(fecha),
+      fecha = parsear_fecha_indice(fecha),
       ipim_periodo = as.numeric(ipim_periodo),
       ipim_actual = as.numeric(ipim_actual),
       coeficiente = as.numeric(coeficiente)
@@ -129,7 +145,7 @@ leer_indices_ipc <- function(path_excel) {
     dplyr::select(1:4) %>%
     dplyr::rename(fecha = 1, ipc_periodo = 2, ipc_actual = 3, coeficiente = 4) %>%
     dplyr::mutate(
-      fecha = as.Date(fecha),
+      fecha = parsear_fecha_indice(fecha),
       ipc_periodo = as.numeric(ipc_periodo),
       ipc_actual = as.numeric(ipc_actual),
       coeficiente = as.numeric(coeficiente)
@@ -143,7 +159,7 @@ leer_indices_ipim_bajas <- function(path_excel) {
     dplyr::select(1:4) %>%
     dplyr::rename(fecha = 1, ipim_periodo = 2, ipim_actual = 3, coeficiente = 4) %>%
     dplyr::mutate(
-      fecha = as.Date(fecha),
+      fecha = parsear_fecha_indice(fecha),
       ipim_periodo = as.numeric(ipim_periodo),
       ipim_actual = as.numeric(ipim_actual),
       coeficiente = as.numeric(coeficiente)
@@ -157,7 +173,7 @@ leer_indices_ipc_bajas <- function(path_excel) {
     dplyr::select(1:4) %>%
     dplyr::rename(fecha = 1, ipc_periodo = 2, ipc_actual = 3, coeficiente = 4) %>%
     dplyr::mutate(
-      fecha = as.Date(fecha),
+      fecha = parsear_fecha_indice(fecha),
       ipc_periodo = as.numeric(ipc_periodo),
       ipc_actual = as.numeric(ipc_actual),
       coeficiente = as.numeric(coeficiente)
@@ -178,6 +194,54 @@ leer_inventario_categorias <- function(path_excel) {
     })
   }
   categorias
+}
+
+# lee las hojas PG / PG AXI del excel real (KPMG/Price) para validar contra el calculo propio
+leer_pg_real <- function(path_excel) {
+  if (!file.exists(path_excel)) return(NULL)
+
+  rubros <- PARAMETROS_RUBROS$rubro
+  cols <- 2:(length(rubros) + 1)
+
+  extraer_fila <- function(hoja, fila) {
+    hojas_disponibles <- readxl::excel_sheets(path_excel)
+    if (!hoja %in% hojas_disponibles) {
+      stop(sprintf(
+        "El archivo real '%s' no tiene la hoja '%s' (hojas disponibles: %s)",
+        basename(path_excel), hoja, paste(hojas_disponibles, collapse = ", ")
+      ))
+    }
+    d <- readxl::read_excel(path_excel, sheet = hoja, col_names = FALSE, .name_repair = "minimal")
+    if (nrow(d) < fila || ncol(d) < max(cols)) {
+      stop(sprintf(
+        "El archivo real '%s', hoja '%s', no tiene la fila/columnas esperadas (fila %d, columnas hasta %d)",
+        basename(path_excel), hoja, fila, max(cols)
+      ))
+    }
+    valores <- as.numeric(unlist(d[fila, cols]))
+    valores[is.na(valores)] <- 0
+    stats::setNames(valores, rubros)
+  }
+
+  vr_revaluo <- extraer_fila("PG", 35)
+  vr_revaluo_reexp <- extraer_fila("PG AXI", 36)
+
+  list(
+    amort_revaluo = extraer_fila("PG", 19),
+    vr_revaluo = vr_revaluo,
+    axi_resultado = vr_revaluo_reexp - vr_revaluo
+  )
+}
+
+# busca el excel de validacion (manual de Price/KPMG) para un anio, excluyendo el archivo
+# usado como input LY y los propios outputs del pipeline (MARG_Revaluo_AXI_*)
+buscar_archivo_real <- function(anio_ejercicio, dir_parametros = file.path("inputs", "parametros")) {
+  archivos <- list.files(dir_parametros, pattern = as.character(anio_ejercicio), full.names = TRUE)
+  archivos <- archivos[grepl("\\.xlsx$", archivos, ignore.case = TRUE)]
+  archivos <- archivos[!grepl("_v_", archivos)]
+  archivos <- archivos[!grepl("^MARG_Revaluo_AXI", basename(archivos))]
+  if (length(archivos) == 0) return(NA_character_)
+  archivos[1]
 }
 
 leer_movimientos_sap <- function(path_sap) {

@@ -168,17 +168,18 @@ calcular_rubro_amortizable <- function(inv, indices_ipc, indices_ipim,
   inv <- calcular_bajas_reexp(inv, indices_ipc_bajas, indices_ipim_bajas)
 # 
   # Para movimientos de baja, anula devengado del ejercicio y deja saldos al valor de LY.
+  # se usa tipo_movimiento_calc para congelar tambien las bajas historicas (de cualquier anio)
   inv <- inv %>%
     dplyr::mutate(
-      vut_ejercicio = dplyr::if_else(tipo_movimiento == "baja", 0, vut_ejercicio),
-      vut_cierre = dplyr::if_else(tipo_movimiento == "baja", vut_ly, vut_cierre),
-      vu_restante = dplyr::if_else(tipo_movimiento == "baja", pmax(vu_asignada - vut_ly, 0), vu_restante),
-      amort_hist_ejercicio = dplyr::if_else(tipo_movimiento == "baja", 0, amort_hist_ejercicio),
-      amort_hist_2018 = dplyr::if_else(tipo_movimiento == "baja", 0, amort_hist_2018),
-      amort_acum_cierre = dplyr::if_else(tipo_movimiento == "baja", amort_acum_ly, amort_acum_cierre),
-      vr = dplyr::if_else(tipo_movimiento == "baja", vr_ly, vr),
-      amort_acum_cierre_reexp = dplyr::if_else(tipo_movimiento == "baja", amort_acum_ly_reexp, amort_acum_cierre_reexp),
-      vr_reexp = dplyr::if_else(tipo_movimiento == "baja", vo_reexp - amort_acum_ly_reexp, vr_reexp)
+      vut_ejercicio = dplyr::if_else(tipo_movimiento_calc == "baja", 0, vut_ejercicio),
+      vut_cierre = dplyr::if_else(tipo_movimiento_calc == "baja", vut_ly, vut_cierre),
+      vu_restante = dplyr::if_else(tipo_movimiento_calc == "baja", pmax(vu_asignada - vut_ly, 0), vu_restante),
+      amort_hist_ejercicio = dplyr::if_else(tipo_movimiento_calc == "baja", 0, amort_hist_ejercicio),
+      amort_hist_2018 = dplyr::if_else(tipo_movimiento_calc == "baja", 0, amort_hist_2018),
+      amort_acum_cierre = dplyr::if_else(tipo_movimiento_calc == "baja", amort_acum_ly, amort_acum_cierre),
+      vr = dplyr::if_else(tipo_movimiento_calc == "baja", vr_ly, vr),
+      amort_acum_cierre_reexp = dplyr::if_else(tipo_movimiento_calc == "baja", amort_acum_ly_reexp, amort_acum_cierre_reexp),
+      vr_reexp = dplyr::if_else(tipo_movimiento_calc == "baja", vo_reexp - amort_acum_ly_reexp, vr_reexp)
     )
 
   inv
@@ -238,7 +239,7 @@ calcular_terrenos <- function(inv, indices_ipc, indices_ipim, anio_ejercicio,
 calcular_bajas_reexp <- function(inv, indices_ipc_bajas, indices_ipim_bajas) {
   inv <- inv %>%
     dplyr::mutate(
-      es_baja = (tipo_movimiento == "baja"),
+      es_baja = (tipo_movimiento_calc == "baja"),
 
       coef_ipc_bajas = dplyr::if_else(
         es_baja & anio_alta >= ANIO_CORTE_REVALUO,

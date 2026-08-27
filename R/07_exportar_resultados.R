@@ -50,7 +50,7 @@ exportar_excel_revaluo <- function(datos, ruta, anio_ejercicio = 2022) {
     if (is.null(d) || nrow(d) == 0) next
 
     cols_export <- intersect(
-      c("tipo_movimiento", "nro_activo_fijo", "descripcion",
+      c("tipo_movimiento", "subclasificacion_historico", "nro_activo_fijo", "descripcion",
         "anio_alta", "mes_alta", "vo", "vu_asignada",
         "trim_primer_anio", "vut_ly", "vut_ejercicio", "vut_cierre",
         "vu_restante", "amort_trimestre", "amort_hist_ejercicio",

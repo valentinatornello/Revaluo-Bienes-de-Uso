@@ -51,6 +51,8 @@ CONTEOS_MOVIMIENTOS_ESPERADOS <- tibble::tribble(
 TOLERANCIA_PRUEBA_GLOBAL <- 1
 UMBRAL_ERROR_PRUEBA_GLOBAL <- 100
 TOLERANCIA_CONSISTENCIA_INTERNA <- 0.01
+# tolerancia porcentual aceptada al comparar contra el manual real (Price/KPMG): 20% de diferencia = 80% de igualdad
+TOLERANCIA_VALIDACION_EXTERNA <- 0.20
 
 SCHEMA_EXCEPCIONES_FECHA_BASE <- tibble::tibble(
   rubro = character(),

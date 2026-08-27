@@ -1,5 +1,5 @@
 # app.R — Shiny app para Revalúo Impositivo Bienes de Uso
-# Permite cargar archivos SAP, ejecutar el pipeline paso a paso y descargar los outputs.
+# App para cargar archivos SAP, ejecutar el paso a paso y descargar los outputs.
 library(shiny)
 library(tidyverse)
 library(readxl)
@@ -45,8 +45,12 @@ generar_prueba_global <- function(datos_axi, anio_ejercicio) {
   pipeline_env$generar_prueba_global(datos_axi, anio_ejercicio)
 }
 
-ejecutar_validaciones <- function(datos_pg) {
-  pipeline_env$ejecutar_validaciones(datos_pg)
+ejecutar_validaciones <- function(datos_pg, pg_real = NULL) {
+  pipeline_env$ejecutar_validaciones(datos_pg, pg_real)
+}
+
+leer_pg_real <- function(path_excel) {
+  pipeline_env$leer_pg_real(path_excel)
 }
 
 exportar_excel_revaluo <- function(datos, ruta, anio_ejercicio) {
@@ -199,6 +203,14 @@ ui <- fluidPage(
         helpText("Debe contener las hojas de categorías e índices IPC / IPIM."),
 
         hr(),
+        div(class = "section-header", "🔍 Validación externa (manual de Price/KPMG)"),
+        fileInput("archivo_real", NULL,
+                  accept = ".xlsx",
+                  buttonLabel = "Seleccionar…",
+                  placeholder = "Opcional: MARG - Revalúo AxI {año}.xlsx"),
+        helpText("Excel con las hojas 'PG' y 'PG AXI' reales del ejercicio, para comparar contra el cálculo propio (tolerancia ± 20%)."),
+
+        hr(),
         div(class = "section-header",
           "📥 Cargar Altas / Bajas / Transferencias SAP",
           tags$button(class = "info-btn", id = "btn_info_sap",
@@ -274,9 +286,9 @@ ui <- fluidPage(
         div(class = "tab-note",
           "ℹ La prueba global cuadra el saldo calculado (s/prueba) con el saldo del revalúo (s/revalúo) por rubro. ",
           "Las diferencias se colorean: ",
-          tags$span(style = "color:green;font-weight:bold;", "verde"), " ≤ $1 · ",
-          tags$span(style = "color:#9C5700;font-weight:bold;", "ámbar"), " $1–$100 · ",
-          tags$span(style = "color:red;font-weight:bold;", "rojo"), " > $100."
+          tags$span(style = "color:green;font-weight:bold;", "verde"), " ≤ $1000 · ",
+          tags$span(style = "color:#9C5700;font-weight:bold;", "ámarillo"), " $1–$1000 · ",
+          tags$span(style = "color:red;font-weight:bold;", "rojo"), " > $1000."
         ),
         uiOutput("paso5_ui")
       ),
@@ -287,17 +299,17 @@ ui <- fluidPage(
         div(class = "tab-note",
           tags$b("ℹ Criterios de validación:"),
           tags$ul(style = "margin:4px 0 0 0; padding-left:18px;",
-            tags$li(tags$b("consistencia_interna"), ": verifica que Amort acum = Amort trim × VUT cierre, y que VR = VO − Amort acum, activo por activo."),
+            tags$li(tags$b("consistencia_interna"), ": chequea que Amort acum = Amort trim × VUT cierre, y que VR = VO − Amort acum, activo por activo."),
             tags$li(tags$b("prueba_global_amort / prueba_global_vr"), ": cuadre entre saldo calculado (s/prueba) y saldo del revalúo (s/revalúo) por rubro."),
-            tags$li(tags$b("vr_reexp_formula"), ": verifica que VR Reexp = VO Reexp − Amort Acum Reexp para todos los activos.")
+            tags$li(tags$b("vr_reexp_formula"), ": chequea que VR Reexp = VO Reexp − Amort Acum Reexp para todos los activos.")
           ),
           tags$p(style = "margin:6px 0 0 0;",
             tags$b("Tolerancias — Prueba Global:"),
-            " diferencia < $1 = OK · $1–$100 = ",
+            " diferencia < $1000 = OK · $1–$1000 = ",
             tags$span(class = "badge-warn", "ADVERTENCIA"),
-            " · > $100 = ",
+            " · > $1000 = ",
             tags$span(class = "badge-error", "ERROR"),
-            ". Las advertencias de pequeña magnitud pueden ser producto de redondeo y deben revisarse manualmente."
+            ". Las advertencias de poca magnitud pueden ser producto de redondeo y deben revisarse manualmente."
           )
         ),
         uiOutput("paso6_ui")
@@ -312,7 +324,6 @@ ui <- fluidPage(
   )
 )
 
-# 
 # ─────────────────────────────────────────────
 #  SERVER
 # ─────────────────────────────────────────────
@@ -551,8 +562,22 @@ server <- function(input, output, session) {
     if (!is.null(estado$error_msg)) return()
 
     # ── Paso 6: validaciones ─────────────────
+    pg_real <- NULL
+    if (!is.null(input$archivo_real)) {
+      dir.create(file.path("inputs", "parametros"), recursive = TRUE, showWarnings = FALSE)
+      path_real_dest <- file.path("inputs", "parametros", basename(input$archivo_real$name))
+      file.copy(input$archivo_real$datapath, path_real_dest, overwrite = TRUE)
+      pg_real <- tryCatch(leer_pg_real(path_real_dest), error = function(e) {
+        estado$error_msg <- paste("Paso 6 — Error al leer archivo real (Price/KPMG):", e$message)
+        output$run_status <- renderUI(
+          tags$p(style = "color:red; font-size:.85rem;", estado$error_msg)
+        )
+        NULL
+      })
+    }
+    if (!is.null(estado$error_msg)) return()
     tryCatch({
-      estado$validacion <- ejecutar_validaciones(estado$prueba_global)
+      estado$validacion <- ejecutar_validaciones(estado$prueba_global, pg_real)
       estado$paso <- 6L
     }, error = function(e) {
       estado$error_msg <- paste("Paso 6 — Error en validaciones:", e$message)
@@ -833,3 +858,4 @@ server <- function(input, output, session) {
 
 # ─────────────────────────────────────────────
 shinyApp(ui, server)
+
