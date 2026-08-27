@@ -566,8 +566,13 @@ server <- function(input, output, session) {
     if (!is.null(input$archivo_real)) {
       dir.create(file.path("inputs", "parametros"), recursive = TRUE, showWarnings = FALSE)
       path_real_dest <- file.path("inputs", "parametros", basename(input$archivo_real$name))
-      file.copy(input$archivo_real$datapath, path_real_dest, overwrite = TRUE)
-      pg_real <- tryCatch(leer_pg_real(path_real_dest), error = function(e) {
+      copia_ok <- file.copy(input$archivo_real$datapath, path_real_dest, overwrite = TRUE)
+      pg_real <- tryCatch({
+        if (!copia_ok || !file.exists(path_real_dest)) {
+          stop(sprintf("no se pudo copiar el archivo subido a '%s'", path_real_dest))
+        }
+        leer_pg_real(path_real_dest)
+      }, error = function(e) {
         estado$error_msg <- paste("Paso 6 — Error al leer archivo real (Price/KPMG):", e$message)
         output$run_status <- renderUI(
           tags$p(style = "color:red; font-size:.85rem;", estado$error_msg)

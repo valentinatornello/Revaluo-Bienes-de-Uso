@@ -198,7 +198,9 @@ leer_inventario_categorias <- function(path_excel) {
 
 # lee las hojas PG / PG AXI del excel real (KPMG/Price) para validar contra el calculo propio
 leer_pg_real <- function(path_excel) {
-  if (!file.exists(path_excel)) return(NULL)
+  if (!file.exists(path_excel)) {
+    stop(sprintf("El archivo real '%s' no existe", path_excel))
+  }
 
   rubros <- PARAMETROS_RUBROS$rubro
   cols <- 2:(length(rubros) + 1)
