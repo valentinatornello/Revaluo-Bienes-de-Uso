@@ -148,6 +148,7 @@ normalizar_baja_sap <- function(bajas, rubro_nombre, anio_ejercicio) {
     nro_activo_fijo = as.character(bajas$nro_activo),
     descripcion = as.character(bajas$descripcion),
     fecha_alta = bajas$posting_date,
+    fecha_baja = bajas$posting_date,
     anio_alta = lubridate::year(bajas$cap_date_parsed),
     mes_alta = lubridate::month(bajas$cap_date_parsed),
     vo = abs(bajas$valor),

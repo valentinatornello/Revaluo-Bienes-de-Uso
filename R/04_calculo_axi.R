@@ -44,6 +44,7 @@ calcular_rubro_amortizable <- function(inv, rubro_nombre, indices_ipc, indices_i
                                         anio_ejercicio,
                                         excepciones_fecha_base = SCHEMA_EXCEPCIONES_FECHA_BASE) {
   periodos_por_anio <- obtener_periodos_por_anio(rubro_nombre)
+  if (!"fecha_baja" %in% names(inv)) inv$fecha_baja <- as.Date(NA)
 
   # Normaliza nulos para poder calcular en forma consistente (VO, VU, año y mes de alta).
   inv <- inv %>%
@@ -65,6 +66,12 @@ calcular_rubro_amortizable <- function(inv, rubro_nombre, indices_ipc, indices_i
         1L
       ),
 
+      periodos_hasta_baja = dplyr::if_else(
+        rubro_nombre == "Edificios" & tipo_movimiento_calc == "baja" & !is.na(fecha_baja),
+        as.integer(floor((lubridate::month(fecha_baja) - 1L) / 3L) + 1L),
+        periodos_por_anio
+      ),
+
       vut_ly = dplyr::if_else(
         !is.na(vut_ly),
         vut_ly,
@@ -76,7 +83,7 @@ calcular_rubro_amortizable <- function(inv, rubro_nombre, indices_ipc, indices_i
         dplyr::if_else(
           anio_alta == anio_ejercicio,
           trim_primer_anio,
-          periodos_por_anio
+          periodos_hasta_baja
         ),
         vu_asignada - vut_ly
       ),
@@ -179,21 +186,6 @@ calcular_rubro_amortizable <- function(inv, rubro_nombre, indices_ipc, indices_i
 
   inv <- calcular_bajas_reexp(inv, indices_ipc_bajas, indices_ipim_bajas)
 # 
-  # Para movimientos de baja, anula devengado del ejercicio y deja saldos al valor de LY.
-  # se usa tipo_movimiento_calc para congelar tambien las bajas historicas (de cualquier anio)
-  inv <- inv %>%
-    dplyr::mutate(
-      vut_ejercicio = dplyr::if_else(tipo_movimiento_calc == "baja", 0, vut_ejercicio),
-      vut_cierre = dplyr::if_else(tipo_movimiento_calc == "baja", vut_ly, vut_cierre),
-      vu_restante = dplyr::if_else(tipo_movimiento_calc == "baja", pmax(vu_asignada - vut_ly, 0), vu_restante),
-      amort_hist_ejercicio = dplyr::if_else(tipo_movimiento_calc == "baja", 0, amort_hist_ejercicio),
-      amort_hist_2018 = dplyr::if_else(tipo_movimiento_calc == "baja", 0, amort_hist_2018),
-      amort_acum_cierre = dplyr::if_else(tipo_movimiento_calc == "baja", amort_acum_ly, amort_acum_cierre),
-      vr = dplyr::if_else(tipo_movimiento_calc == "baja", vr_ly, vr),
-      amort_acum_cierre_reexp = dplyr::if_else(tipo_movimiento_calc == "baja", amort_acum_ly_reexp, amort_acum_cierre_reexp),
-      vr_reexp = dplyr::if_else(tipo_movimiento_calc == "baja", vo_reexp - amort_acum_ly_reexp, vr_reexp)
-    )
-
   inv
 }
 

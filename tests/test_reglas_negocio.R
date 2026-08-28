@@ -52,6 +52,26 @@ stopifnot(resultado_edificios_parcial$amort_hist_ejercicio == 1.5)
 stopifnot(resultado_rodados_parcial$vut_ejercicio == 1)
 stopifnot(resultado_rodados_parcial$amort_hist_ejercicio == 20)
 
+activo_baja <- activo_prueba %>%
+  dplyr::mutate(
+    fecha_alta = as.Date("2022-01-01"),
+    anio_alta = 2022L,
+    fecha_baja = as.Date("2023-04-01"),
+    tipo_movimiento_calc = "baja"
+  )
+resultado_edificios_baja <- calcular_rubro_amortizable(
+  activo_baja[1, ], "Edificios", indices_prueba, indices_prueba,
+  indices_prueba, indices_prueba, 2023
+)
+resultado_rodados_baja <- calcular_rubro_amortizable(
+  activo_baja[2, ], "Rodados", indices_prueba, indices_prueba,
+  indices_prueba, indices_prueba, 2023
+)
+stopifnot(resultado_edificios_baja$vut_ejercicio == 2)
+stopifnot(resultado_edificios_baja$amort_hist_ejercicio == 1)
+stopifnot(resultado_rodados_baja$vut_ejercicio == 1)
+stopifnot(resultado_rodados_baja$amort_hist_ejercicio == 20)
+
 movimiento_rodados <- tibble::tibble(
   nro_activo = "R-SAP",
   descripcion = "Rodado de prueba",
