@@ -131,8 +131,8 @@ referencias_revaluo <- function() {
       "Valor residual histórico (VO menos amortización acumulada).",
       "Valor residual ajustado por índices (IPC/IPIM).",
       "Ajuste por inflación impositivo del bien.",
-      "Vida útil total del bien expresada en trimestres.",
-      "Vida útil transcurrida del bien expresada en trimestres."
+      "Vida útil total: trimestres para Edificios y años para los demás rubros amortizables.",
+      "Vida útil transcurrida: trimestres para Edificios y años para los demás rubros amortizables."
     )
   )
 
@@ -151,14 +151,16 @@ referencias_revaluo <- function() {
   # Resume fórmulas de control y cálculo usadas por el equipo.
   formulas <- tibble::tibble(
     formula = c(
-      "Amort. acumulada = amort_trimestre × VUT cierre",
+      "Edificios: Amort. acumulada = amort_trimestre × VUT cierre",
+      "Otros rubros: Amort. acumulada = amort_anual × VUT cierre",
       "VR = VO - Amort. acumulada",
       "VR Reexp = VO Reexp - Amort. Acum. Reexp",
       "AXI = VR Reexp - VR",
       "PG diferencia = saldo s/prueba - saldo s/revalúo"
     ),
     nota = c(
-      "Control de consistencia por activo/rubro.",
+      "Edificios devengan por trimestre; VUT está expresada en trimestres.",
+      "Los demás rubros amortizables devengan por año; VUT está expresada en años.",
       "Cálculo base en valores históricos.",
       "Cálculo ajustado por índice de actualización.",
       "Resultado del ajuste impositivo por inflación.",
@@ -220,7 +222,7 @@ ui <- fluidPage(
 
         hr(),
         div(class = "section-header",
-          "📂 Archivo de parámetros (Excel LY)",
+          "📂 Archivo Histórico (Excel LY)",
           tags$button(class = "info-btn", id = "btn_info_ly",
                       onclick = "Shiny.setInputValue('show_info_ly', Math.random())",
                       "ℹ")
@@ -402,13 +404,14 @@ server <- function(input, output, session) {
         list("Descripción",      "Texto",  "Descripción del bien"),
         list("Año Archivo / Cap Date", "Fecha", "Fecha de activación del bien"),
         list("VO",               "Numérico", "Valor de origen histórico"),
-        list("VU Asignada",      "Numérico", "Vida útil en trimestres"),
-        list("VUT LY",           "Numérico", "Trimestres usados al cierre del año anterior")
+        list("VU Asignada",      "Numérico", "Trimestres para Edificios; años para los demás rubros amortizables"),
+        list("VUT LY",           "Numérico", "Trimestres usados para Edificios; años usados para los demás rubros amortizables")
       )),
       tags$p(style = "font-size:.8rem; color:#555;",
         "Nota: el encabezado puede encontrarse en filas distintas según el rubro ",
         "(p.ej. fila 13 en Cercos, fila 16 en Edificios). ",
-        "La app detecta el header automáticamente según la configuración interna."
+        "La app detecta el header automáticamente según la configuración interna. ",
+        "Los códigos de activo se leen como texto, incluso si contienen valores como AS000010824."
       ),
 
       tags$hr(),
@@ -698,18 +701,52 @@ server <- function(input, output, session) {
     inv <- estado$datos_limpios$inventario_ly
     if (is.null(inv) || length(inv) == 0) return(tags$p("Sin datos de inventario."))
 
+    # Los movimientos del ejercicio actual llegan por el archivo SAP (Altas/Bajas/Transferencias),
+    # no por la hoja LY, que solo trae historico salvo casos ya clasificados como del anio en curso.
+    altas_sap <- estado$datos_limpios$altas
+    bajas_sap <- estado$datos_limpios$bajas
+    transf_sap <- estado$datos_limpios$transferencias
+
+    contar_por_rubro <- function(df, r) {
+      if (is.null(df) || nrow(df) == 0 || !"rubro" %in% names(df)) return(0L)
+      sum(df$rubro == r, na.rm = TRUE)
+    }
+
+    anio_seleccionado <- as.integer(input$anio_ejercicio)
+
     rows <- lapply(names(inv), function(r) {
       d <- inv[[r]]
-      tipos <- if (nrow(d) > 0) paste(sort(unique(d$tipo_movimiento)), collapse = ", ") else "—"
+      movimientos <- tolower(trimws(as.character(d$tipo_movimiento)))
+      subcategorias_historicas <- tolower(trimws(as.character(d$subclasificacion_historico)))
+      es_alta_actual <- movimientos %in% c("alta", "alta_y_baja")
+      es_baja_actual <- movimientos %in% c("baja", "alta_y_baja")
+      es_transferencia_actual <- movimientos == "transferencia"
+      es_baja_historica <- subcategorias_historicas %in% c("baja", "alta_y_baja")
+      es_alta_historica <- subcategorias_historicas %in% c("alta", "alta_y_baja")
+      es_transferencia_historica <- subcategorias_historicas == "transferencia"
+
+      n_altas <- sum(es_alta_actual) + contar_por_rubro(altas_sap, r)
+      n_bajas <- sum(es_baja_actual) + contar_por_rubro(bajas_sap, r)
+      n_transf <- sum(es_transferencia_actual) + contar_por_rubro(transf_sap, r)
+
       tags$tr(
         tags$td(r),
-        tags$td(nrow(d)),
-        tags$td(tipos)
+        tags$td(anio_seleccionado),
+        tags$td(n_altas + n_bajas + n_transf),
+        tags$td(n_altas),
+        tags$td(n_bajas),
+        tags$td(n_transf),
+        tags$td(sum(es_baja_historica)),
+        tags$td(sum(es_alta_historica)),
+        tags$td(sum(es_transferencia_historica))
       )
     })
- # Separar el número de filas por movimiento y mostrarlo en la tabla de resumen # RECORDAR
+    # Desglosa movimientos del ejercicio y clasificaciones preservadas del LY.
     tags$table(class = "summary-table",
-      tags$thead(tags$tr(lapply(c("Rubro", "Filas", "Tipos de movimiento"), tags$th))),
+      tags$thead(tags$tr(lapply(c(
+        "Rubro", "Año", "Transacciones", "Altas", "Bajas", "Transferencias",
+        "Filas Bajas Histórico", "Filas Altas Histórico", "Filas Transferencia Histórico"
+      ), tags$th))),
       tags$tbody(rows)
     )
   })

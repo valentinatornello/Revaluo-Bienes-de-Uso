@@ -82,6 +82,11 @@ El output final es un archivo Excel con la siguiente estructura:
 - **Resto de los rubros amortizables**: la vida útil y la amortización se calculan por años; se devenga un período anual por ejercicio, sujeto a la vida útil restante.
 - **Terrenos**: no se amortizan.
 
+Las fórmulas de referencia para la amortización acumulada son:
+
+- **Edificios**: `Amortización acumulada = amort_trimestre × VUT cierre`, con VUT expresada en trimestres.
+- **Resto de los rubros amortizables**: `Amortización acumulada = amort_anual × VUT cierre`, con VUT expresada en años.
+
 La columna técnica `amort_trimestre` se mantiene en los archivos de salida para conservar compatibilidad con los modelos previos; para rubros distintos de Edificios contiene el importe de amortización anual.
 
 ## MARG – Reexp. de amortizaciones

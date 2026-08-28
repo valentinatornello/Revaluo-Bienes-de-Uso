@@ -97,6 +97,7 @@ leer_hoja_categoria <- function(path_excel, hoja, config_hoja = NULL) {
     path_excel,
     sheet = hoja,
     col_names = FALSE,
+    col_types = "text",
     .name_repair = "minimal"
   )
 

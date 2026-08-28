@@ -57,20 +57,22 @@ calcular_rubro_amortizable <- function(inv, rubro_nombre, indices_ipc, indices_i
 
   inv <- aplicar_excepciones_fecha_base(inv, excepciones_fecha_base)
 
+  trim_primer_anio <- if (rubro_nombre == "Edificios") {
+    calcular_trimestres_primer_anio(inv$mes_alta)
+  } else {
+    rep.int(1L, nrow(inv))
+  }
+  periodos_hasta_baja <- rep.int(periodos_por_anio, nrow(inv))
+  es_baja_edificio <- rubro_nombre == "Edificios" &
+    inv$tipo_movimiento_calc == "baja" & !is.na(inv$fecha_baja)
+  periodos_hasta_baja[es_baja_edificio] <-
+    as.integer(floor((lubridate::month(inv$fecha_baja[es_baja_edificio]) - 1L) / 3L) + 1L)
+
   inv <- inv %>%
     dplyr::mutate(
       # Edificios devenga por trimestre; los otros rubros, por año.
-      trim_primer_anio = dplyr::if_else(
-        periodos_por_anio == 4L,
-        calcular_trimestres_primer_anio(mes_alta),
-        1L
-      ),
-
-      periodos_hasta_baja = dplyr::if_else(
-        rubro_nombre == "Edificios" & tipo_movimiento_calc == "baja" & !is.na(fecha_baja),
-        as.integer(floor((lubridate::month(fecha_baja) - 1L) / 3L) + 1L),
-        periodos_por_anio
-      ),
+      trim_primer_anio = trim_primer_anio,
+      periodos_hasta_baja = periodos_hasta_baja,
 
       vut_ly = dplyr::if_else(
         !is.na(vut_ly),
