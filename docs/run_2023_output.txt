@@ -1,0 +1,553 @@
+
+============ 0-BASELINE ============
+New names:
+• `` -> `...1`
+• `` -> `...2`
+• `` -> `...3`
+• `` -> `...4`
+New names:
+• `` -> `...5`
+• `` -> `...6`
+• `` -> `...7`
+• `` -> `...8`
+• `` -> `...9`
+• `` -> `...10`
+• `` -> `...11`
+• `` -> `...12`
+• `` -> `...13`
+New names:
+• `` -> `...1`
+• `` -> `...2`
+• `` -> `...3`
+• `` -> `...4`
+  Altas SAP cargadas: 3339
+  Bajas SAP cargadas: 1373
+  Transf SAP cargadas: 1583
+  Rubros en inventario: Cercos, Edificios, Terrenos, Eq de Oficina, Maquinas y Equipos, Maquinas Mejoras, MyU, Rodados, Terreno Mejoras, Software
+    Cercos: 9 activos, 0 movimientos 2023
+    Edificios: 4818 activos, 532 movimientos 2023
+    Terrenos: 25 activos, 0 movimientos 2023
+    Eq de Oficina: 18006 activos, 858 movimientos 2023
+    Maquinas y Equipos: 31634 activos, 3112 movimientos 2023
+    Maquinas Mejoras: 429 activos, 55 movimientos 2023
+    MyU: 7957 activos, 1374 movimientos 2023
+    Rodados: 7110 activos, 219 movimientos 2023
+    Terreno Mejoras: 1048 activos, 127 movimientos 2023
+    Software: 571 activos, 18 movimientos 2023
+
+--- COMPARACIÓN VS ESTUDIO 2023 ---
+Rubro                        Amort_R       Amort_Est        Dif_$    Dif_% |            VR_R          VR_Est        Dif_$    Dif_%
+Cercos                        101674            2550        99124  3887.2% |               0            2580        -2580  -100.0%
+Edificios                  219374883        39733727    179641156   452.1% |      2694341408      2600198170     94143238     3.6%
+Terrenos                           0               0            0     0.0% |        30473583       245932359   -215458776   -87.6%
+Estructuras y caños              NA               0           NA     0.0% |              NA               0           NA     0.0%
+Eq de Oficina              452309836       104286242    348023594   333.7% |       193343433        93979868     99363565   105.7%
+Maquinas y Equipos        2687386815       404710723   2282676092   564.0% |      2449259053      3001724926   -552465873   -18.4%
+Maquinas Mejoras            20565281         1219750     19345531  1586.0% |               0         2401160     -2401160  -100.0%
+MyU                        234304679        44924626    189380053   421.6% |        95661000        59717119     35943881    60.2%
+Rodados                   1303794689       316048703    987745986   312.5% |       687429777       970220355   -282790578   -29.1%
+Terreno Mejoras            163604431        40837468    122766963   300.6% |       293302687       332969741    -39667054   -11.9%
+Software                   976940547       227761168    749179379   328.9% |        74294553       278346781   -204052228   -73.3%
+TOTAL                     6058382835      1179524957   4878857878   413.6% |      6518105494      7585493059  -1067387565   -14.1%
+
+Rubro                         VR_R_R        VR_R_Est        Dif_$    Dif_% |           AXI_R         AXI_Est        Dif_$
+Cercos                             0            2580        -2580  -100.0% |               0               0            0
+Edificios                27175573381      8976060994  18199512387   202.8% |     24479813682      6375862824  18103950858
+Terrenos                  2125412427         7873523   2117538904 26894.4% |      2094938845      -238058836   2332997681
+Estructuras y caños              NA               0           NA     0.0% |              NA               0           NA
+Eq de Oficina              197579605       245329571    -47749966   -19.5% |          141351       151349703   -151208352
+Maquinas y Equipos        2929156427     13582320140 -10653163713   -78.4% |       463362365     10580595214 -10117232849
+Maquinas Mejoras               65929         2401160     -2335231   -97.2% |               0               0            0
+MyU                         97558761       125239859    -27681098   -22.1% |         1487534        65522740    -64035206
+Rodados                    855741391      4060883460  -3205142069   -78.9% |       162269482      3090663105  -2928393623
+Terreno Mejoras            355489812      1297996142   -942506330   -72.6% |        62168190       965026401   -902858211
+Software                     7368886       881821181   -874452295   -99.2% |       -66938578       603474400   -670412978
+TOTAL                    33743946621     29179928610   4564018011    15.6% |     27197242871     21594435551   5602807320
+
+PG interna (s/prueba - s/revaluo): amort=8545642659  vr=5388809149
+
+============ 1-V03-fix-VU ============
+New names:
+• `` -> `...1`
+• `` -> `...2`
+• `` -> `...3`
+• `` -> `...4`
+New names:
+• `` -> `...5`
+• `` -> `...6`
+• `` -> `...7`
+• `` -> `...8`
+• `` -> `...9`
+• `` -> `...10`
+• `` -> `...11`
+• `` -> `...12`
+• `` -> `...13`
+New names:
+• `` -> `...1`
+• `` -> `...2`
+• `` -> `...3`
+• `` -> `...4`
+  Altas SAP cargadas: 3339
+  Bajas SAP cargadas: 1373
+  Transf SAP cargadas: 1583
+  Rubros en inventario: Cercos, Edificios, Terrenos, Eq de Oficina, Maquinas y Equipos, Maquinas Mejoras, MyU, Rodados, Terreno Mejoras, Software
+    Cercos: 9 activos, 0 movimientos 2023
+    Edificios: 4818 activos, 532 movimientos 2023
+    Terrenos: 25 activos, 0 movimientos 2023
+    Eq de Oficina: 18006 activos, 858 movimientos 2023
+    Maquinas y Equipos: 31634 activos, 3112 movimientos 2023
+    Maquinas Mejoras: 429 activos, 55 movimientos 2023
+    MyU: 7957 activos, 1374 movimientos 2023
+    Rodados: 7110 activos, 219 movimientos 2023
+    Terreno Mejoras: 1048 activos, 127 movimientos 2023
+    Software: 571 activos, 18 movimientos 2023
+
+--- COMPARACIÓN VS ESTUDIO 2023 ---
+Rubro                        Amort_R       Amort_Est        Dif_$    Dif_% |            VR_R          VR_Est        Dif_$    Dif_%
+Cercos                         96544            2550        93994  3686.0% |            5130            2580         2550    98.8%
+Edificios                  219374883        39733727    179641156   452.1% |      2694341408      2600198170     94143238     3.6%
+Terrenos                           0               0            0     0.0% |        30473583       245932359   -215458776   -87.6%
+Estructuras y caños              NA               0           NA     0.0% |              NA               0           NA     0.0%
+Eq de Oficina              325424424       104286242    221138182   212.1% |       320228845        93979868    226248977   240.7%
+Maquinas y Equipos        1672033368       404710723   1267322645   313.1% |      3464612499      3001724926    462887573    15.4%
+Maquinas Mejoras            16936730         1219750     15716980  1288.5% |         3628551         2401160      1227391    51.1%
+MyU                        215671046        44924626    170746420   380.1% |       114294633        59717119     54577514    91.4%
+Rodados                    618073872       316048703    302025169    95.6% |      1373150594       970220355    402930239    41.5%
+Terreno Mejoras             92504912        40837468     51667444   126.5% |       364402207       332969741     31432466     9.4%
+Software                   593252955       227761168    365491787   160.5% |       457982144       278346781    179635363    64.5%
+TOTAL                     3753368734      1179524957   2573843777   218.2% |      8823119595      7585493059   1237626536    16.3%
+
+Rubro                         VR_R_R        VR_R_Est        Dif_$    Dif_% |           AXI_R         AXI_Est        Dif_$
+Cercos                        361934            2580       359354 13928.5% |          356804               0       356804
+Edificios                27175573381      8976060994  18199512387   202.8% |     24479813682      6375862824  18103950858
+Terrenos                  2125412427         7873523   2117538904 26894.4% |      2094938845      -238058836   2332997681
+Estructuras y caños              NA               0           NA     0.0% |              NA               0           NA
+Eq de Oficina              448679814       245329571    203350243    82.9% |       124356147       151349703    -26993556
+Maquinas y Equipos        7280063557     13582320140  -6302256583   -46.4% |      3798916048     10580595214  -6781679166
+Maquinas Mejoras            50739846         2401160     48338686  2013.1% |        47045366               0     47045366
+MyU                        131657278       125239859      6417419     5.1% |        16952418        65522740    -48570322
+Rodados                   2330362055      4060883460  -1730521405   -42.6% |       951169329      3090663105  -2139493776
+Terreno Mejoras            609270778      1297996142   -688725364   -53.1% |       244849636       965026401   -720176765
+Software                   391056478       881821181   -490764703   -55.6% |       -66938578       603474400   -670412978
+TOTAL                    40543177548     29179928610  11363248938    38.9% |     31691459698     21594435551  10097024147
+
+PG interna (s/prueba - s/revaluo): amort=221581928  vr=0
+
+============ 2-B01-coef1 ============
+New names:
+• `` -> `...1`
+• `` -> `...2`
+• `` -> `...3`
+• `` -> `...4`
+New names:
+• `` -> `...5`
+• `` -> `...6`
+• `` -> `...7`
+• `` -> `...8`
+• `` -> `...9`
+• `` -> `...10`
+• `` -> `...11`
+• `` -> `...12`
+• `` -> `...13`
+New names:
+• `` -> `...1`
+• `` -> `...2`
+• `` -> `...3`
+• `` -> `...4`
+  Altas SAP cargadas: 3339
+  Bajas SAP cargadas: 1373
+  Transf SAP cargadas: 1583
+  Rubros en inventario: Cercos, Edificios, Terrenos, Eq de Oficina, Maquinas y Equipos, Maquinas Mejoras, MyU, Rodados, Terreno Mejoras, Software
+    Cercos: 9 activos, 0 movimientos 2023
+    Edificios: 4818 activos, 532 movimientos 2023
+    Terrenos: 25 activos, 0 movimientos 2023
+    Eq de Oficina: 18006 activos, 858 movimientos 2023
+    Maquinas y Equipos: 31634 activos, 3112 movimientos 2023
+    Maquinas Mejoras: 429 activos, 55 movimientos 2023
+    MyU: 7957 activos, 1374 movimientos 2023
+    Rodados: 7110 activos, 219 movimientos 2023
+    Terreno Mejoras: 1048 activos, 127 movimientos 2023
+    Software: 571 activos, 18 movimientos 2023
+
+--- COMPARACIÓN VS ESTUDIO 2023 ---
+Rubro                        Amort_R       Amort_Est        Dif_$    Dif_% |            VR_R          VR_Est        Dif_$    Dif_%
+Cercos                         96544            2550        93994  3686.0% |            5130            2580         2550    98.8%
+Edificios                  219374883        39733727    179641156   452.1% |      2694341408      2600198170     94143238     3.6%
+Terrenos                           0               0            0     0.0% |        30473583       245932359   -215458776   -87.6%
+Estructuras y caños              NA               0           NA     0.0% |              NA               0           NA     0.0%
+Eq de Oficina              325424424       104286242    221138182   212.1% |       320228845        93979868    226248977   240.7%
+Maquinas y Equipos        1672033368       404710723   1267322645   313.1% |      3464612499      3001724926    462887573    15.4%
+Maquinas Mejoras            16936730         1219750     15716980  1288.5% |         3628551         2401160      1227391    51.1%
+MyU                        215671046        44924626    170746420   380.1% |       114294633        59717119     54577514    91.4%
+Rodados                    618073872       316048703    302025169    95.6% |      1373150594       970220355    402930239    41.5%
+Terreno Mejoras             92504912        40837468     51667444   126.5% |       364402207       332969741     31432466     9.4%
+Software                   593252955       227761168    365491787   160.5% |       457982144       278346781    179635363    64.5%
+TOTAL                     3753368734      1179524957   2573843777   218.2% |      8823119595      7585493059   1237626536    16.3%
+
+Rubro                         VR_R_R        VR_R_Est        Dif_$    Dif_% |           AXI_R         AXI_Est        Dif_$
+Cercos                          5130            2580         2550    98.8% |               0               0            0
+Edificios                 4092653890      8976060994  -4883407104   -54.4% |      1396894191      6375862824  -4978968633
+Terrenos                    30473583         7873523     22600060   287.0% |               0      -238058836    238058836
+Estructuras y caños              NA               0           NA     0.0% |              NA               0           NA
+Eq de Oficina              448679814       245329571    203350243    82.9% |       124356147       151349703    -26993556
+Maquinas y Equipos        6098903950     13582320140  -7483416190   -55.1% |      2617756442     10580595214  -7962838772
+Maquinas Mejoras             3694480         2401160      1293320    53.9% |               0               0            0
+MyU                        129633747       125239859      4393888     3.5% |        14928887        65522740    -50593853
+Rodados                   2316507045      4060883460  -1744376415   -43.0% |       937314319      3090663105  -2153348786
+Terreno Mejoras            582285489      1297996142   -715710653   -55.1% |       217864347       965026401   -747162054
+Software                   391056478       881821181   -490764703   -55.6% |       -66938578       603474400   -670412978
+TOTAL                    14093893605     29179928610 -15086035005   -51.7% |      5242175755     21594435551 -16352259796
+
+PG interna (s/prueba - s/revaluo): amort=221581928  vr=0
+
+============ 3-V08-bajas-fecha ============
+New names:
+• `` -> `...1`
+• `` -> `...2`
+• `` -> `...3`
+• `` -> `...4`
+New names:
+• `` -> `...5`
+• `` -> `...6`
+• `` -> `...7`
+• `` -> `...8`
+• `` -> `...9`
+• `` -> `...10`
+• `` -> `...11`
+• `` -> `...12`
+• `` -> `...13`
+New names:
+• `` -> `...1`
+• `` -> `...2`
+• `` -> `...3`
+• `` -> `...4`
+  Altas SAP cargadas: 3339
+  Bajas SAP cargadas: 1373
+  Transf SAP cargadas: 1583
+  Rubros en inventario: Cercos, Edificios, Terrenos, Eq de Oficina, Maquinas y Equipos, Maquinas Mejoras, MyU, Rodados, Terreno Mejoras, Software
+    Cercos: 9 activos, 0 movimientos 2023
+    Edificios: 4818 activos, 532 movimientos 2023
+    Terrenos: 25 activos, 0 movimientos 2023
+    Eq de Oficina: 18006 activos, 858 movimientos 2023
+    Maquinas y Equipos: 31634 activos, 3112 movimientos 2023
+    Maquinas Mejoras: 429 activos, 55 movimientos 2023
+    MyU: 7957 activos, 1374 movimientos 2023
+    Rodados: 7110 activos, 219 movimientos 2023
+    Terreno Mejoras: 1048 activos, 127 movimientos 2023
+    Software: 571 activos, 18 movimientos 2023
+
+--- COMPARACIÓN VS ESTUDIO 2023 ---
+Rubro                        Amort_R       Amort_Est        Dif_$    Dif_% |            VR_R          VR_Est        Dif_$    Dif_%
+Cercos                         96544            2550        93994  3686.0% |            5130            2580         2550    98.8%
+Edificios                  219374883        39733727    179641156   452.1% |      2694341408      2600198170     94143238     3.6%
+Terrenos                           0               0            0     0.0% |        30473583       245932359   -215458776   -87.6%
+Estructuras y caños              NA               0           NA     0.0% |              NA               0           NA     0.0%
+Eq de Oficina              325424424       104286242    221138182   212.1% |       320228845        93979868    226248977   240.7%
+Maquinas y Equipos        1672033368       404710723   1267322645   313.1% |      3464612499      3001724926    462887573    15.4%
+Maquinas Mejoras            16936730         1219750     15716980  1288.5% |         3628551         2401160      1227391    51.1%
+MyU                        215671046        44924626    170746420   380.1% |       114294633        59717119     54577514    91.4%
+Rodados                    618073872       316048703    302025169    95.6% |      1373150594       970220355    402930239    41.5%
+Terreno Mejoras             92504912        40837468     51667444   126.5% |       364402207       332969741     31432466     9.4%
+Software                   593252955       227761168    365491787   160.5% |       457982144       278346781    179635363    64.5%
+TOTAL                     3753368734      1179524957   2573843777   218.2% |      8823119595      7585493059   1237626536    16.3%
+
+Rubro                         VR_R_R        VR_R_Est        Dif_$    Dif_% |           AXI_R         AXI_Est        Dif_$
+Cercos                          5130            2580         2550    98.8% |               0               0            0
+Edificios                 4092653890      8976060994  -4883407104   -54.4% |      1396894191      6375862824  -4978968633
+Terrenos                    30473583         7873523     22600060   287.0% |               0      -238058836    238058836
+Estructuras y caños              NA               0           NA     0.0% |              NA               0           NA
+Eq de Oficina              451319871       245329571    205990300    84.0% |       126996205       151349703    -24353498
+Maquinas y Equipos        6098903950     13582320140  -7483416190   -55.1% |      2617756442     10580595214  -7962838772
+Maquinas Mejoras             3694480         2401160      1293320    53.9% |               0               0            0
+MyU                        129656386       125239859      4416527     3.5% |        14951526        65522740    -50571214
+Rodados                   2330531034      4060883460  -1730352426   -42.6% |       951338308      3090663105  -2139324797
+Terreno Mejoras            582285489      1297996142   -715710653   -55.1% |       217864347       965026401   -747162054
+Software                   391056478       881821181   -490764703   -55.6% |       -66938578       603474400   -670412978
+TOTAL                    14110580290     29179928610 -15069348320   -51.6% |      5258862439     21594435551 -16335573112
+
+PG interna (s/prueba - s/revaluo): amort=221581928  vr=0
+
+============ 4-B04-VUT-int ============
+New names:
+• `` -> `...1`
+• `` -> `...2`
+• `` -> `...3`
+• `` -> `...4`
+New names:
+• `` -> `...5`
+• `` -> `...6`
+• `` -> `...7`
+• `` -> `...8`
+• `` -> `...9`
+• `` -> `...10`
+• `` -> `...11`
+• `` -> `...12`
+• `` -> `...13`
+New names:
+• `` -> `...1`
+• `` -> `...2`
+• `` -> `...3`
+• `` -> `...4`
+  Altas SAP cargadas: 3339
+  Bajas SAP cargadas: 1373
+  Transf SAP cargadas: 1583
+  Rubros en inventario: Cercos, Edificios, Terrenos, Eq de Oficina, Maquinas y Equipos, Maquinas Mejoras, MyU, Rodados, Terreno Mejoras, Software
+    Cercos: 9 activos, 0 movimientos 2023
+    Edificios: 4818 activos, 532 movimientos 2023
+    Terrenos: 25 activos, 0 movimientos 2023
+    Eq de Oficina: 18006 activos, 858 movimientos 2023
+    Maquinas y Equipos: 31634 activos, 3112 movimientos 2023
+    Maquinas Mejoras: 429 activos, 55 movimientos 2023
+    MyU: 7957 activos, 1374 movimientos 2023
+    Rodados: 7110 activos, 219 movimientos 2023
+    Terreno Mejoras: 1048 activos, 127 movimientos 2023
+    Software: 571 activos, 18 movimientos 2023
+
+--- COMPARACIÓN VS ESTUDIO 2023 ---
+Rubro                        Amort_R       Amort_Est        Dif_$    Dif_% |            VR_R          VR_Est        Dif_$    Dif_%
+Cercos                         96544            2550        93994  3686.0% |            5130            2580         2550    98.8%
+Edificios                  219374883        39733727    179641156   452.1% |      2694341408      2600198170     94143238     3.6%
+Terrenos                           0               0            0     0.0% |        30473583       245932359   -215458776   -87.6%
+Estructuras y caños              NA               0           NA     0.0% |              NA               0           NA     0.0%
+Eq de Oficina              325490061       104286242    221203819   212.1% |       320163208        93979868    226183340   240.7%
+Maquinas y Equipos        1674472322       404710723   1269761599   313.8% |      3462173545      3001724926    460448619    15.3%
+Maquinas Mejoras            16936730         1219750     15716980  1288.5% |         3628551         2401160      1227391    51.1%
+MyU                        215671375        44924626    170746749   380.1% |       114294304        59717119     54577185    91.4%
+Rodados                    618891802       316048703    302843099    95.8% |      1372332664       970220355    402112309    41.5%
+Terreno Mejoras             92516092        40837468     51678624   126.5% |       364391027       332969741     31421286     9.4%
+Software                   551137200       227761168    323376032   142.0% |       500097900       278346781    221751119    79.7%
+TOTAL                     3714587009      1179524957   2535062052   214.9% |      8861901319      7585493059   1276408260    16.8%
+
+Rubro                         VR_R_R        VR_R_Est        Dif_$    Dif_% |           AXI_R         AXI_Est        Dif_$
+Cercos                          5130            2580         2550    98.8% |               0               0            0
+Edificios                 4092653890      8976060994  -4883407104   -54.4% |      1396894191      6375862824  -4978968633
+Terrenos                    30473583         7873523     22600060   287.0% |               0      -238058836    238058836
+Estructuras y caños              NA               0           NA     0.0% |              NA               0           NA
+Eq de Oficina              444599951       245329571    199270380    81.2% |       124362747       151349703    -26986956
+Maquinas y Equipos        6079878636     13582320140  -7502441504   -55.2% |      2617291411     10580595214  -7963303803
+Maquinas Mejoras             3628551         2401160      1227391    51.1% |               0               0            0
+MyU                        129277061       125239859      4037202     3.2% |        14946998        65522740    -50575742
+Rodados                   2309365705      4060883460  -1751517755   -43.1% |       937033041      3090663105  -2153630064
+Terreno Mejoras            582255373      1297996142   -715740769   -55.1% |       217864347       965026401   -747162054
+Software                   447869027       881821181   -433952154   -49.2% |       -52228873       603474400   -655703273
+TOTAL                    14120006908     29179928610 -15059921702   -51.6% |      5256163862     21594435551 -16338271689
+
+PG interna (s/prueba - s/revaluo): amort=221582191  vr=0
+
+============ 5-V05-noop ============
+New names:
+• `` -> `...1`
+• `` -> `...2`
+• `` -> `...3`
+• `` -> `...4`
+New names:
+• `` -> `...5`
+• `` -> `...6`
+• `` -> `...7`
+• `` -> `...8`
+• `` -> `...9`
+• `` -> `...10`
+• `` -> `...11`
+• `` -> `...12`
+• `` -> `...13`
+New names:
+• `` -> `...1`
+• `` -> `...2`
+• `` -> `...3`
+• `` -> `...4`
+  Altas SAP cargadas: 3339
+  Bajas SAP cargadas: 1373
+  Transf SAP cargadas: 1583
+  Rubros en inventario: Cercos, Edificios, Terrenos, Eq de Oficina, Maquinas y Equipos, Maquinas Mejoras, MyU, Rodados, Terreno Mejoras, Software
+    Cercos: 9 activos, 0 movimientos 2023
+    Edificios: 4818 activos, 532 movimientos 2023
+    Terrenos: 25 activos, 0 movimientos 2023
+    Eq de Oficina: 18006 activos, 858 movimientos 2023
+    Maquinas y Equipos: 31634 activos, 3112 movimientos 2023
+    Maquinas Mejoras: 429 activos, 55 movimientos 2023
+    MyU: 7957 activos, 1374 movimientos 2023
+    Rodados: 7110 activos, 219 movimientos 2023
+    Terreno Mejoras: 1048 activos, 127 movimientos 2023
+    Software: 571 activos, 18 movimientos 2023
+
+--- COMPARACIÓN VS ESTUDIO 2023 ---
+Rubro                        Amort_R       Amort_Est        Dif_$    Dif_% |            VR_R          VR_Est        Dif_$    Dif_%
+Cercos                         96544            2550        93994  3686.0% |            5130            2580         2550    98.8%
+Edificios                  219374883        39733727    179641156   452.1% |      2694341408      2600198170     94143238     3.6%
+Terrenos                           0               0            0     0.0% |        30473583       245932359   -215458776   -87.6%
+Estructuras y caños              NA               0           NA     0.0% |              NA               0           NA     0.0%
+Eq de Oficina              325490061       104286242    221203819   212.1% |       320163208        93979868    226183340   240.7%
+Maquinas y Equipos        1674472322       404710723   1269761599   313.8% |      3462173545      3001724926    460448619    15.3%
+Maquinas Mejoras            16936730         1219750     15716980  1288.5% |         3628551         2401160      1227391    51.1%
+MyU                        215671375        44924626    170746749   380.1% |       114294304        59717119     54577185    91.4%
+Rodados                    618891802       316048703    302843099    95.8% |      1372332664       970220355    402112309    41.5%
+Terreno Mejoras             92516092        40837468     51678624   126.5% |       364391027       332969741     31421286     9.4%
+Software                   551137200       227761168    323376032   142.0% |       500097900       278346781    221751119    79.7%
+TOTAL                     3714587009      1179524957   2535062052   214.9% |      8861901319      7585493059   1276408260    16.8%
+
+Rubro                         VR_R_R        VR_R_Est        Dif_$    Dif_% |           AXI_R         AXI_Est        Dif_$
+Cercos                          5130            2580         2550    98.8% |               0               0            0
+Edificios                 4092653890      8976060994  -4883407104   -54.4% |      1396894191      6375862824  -4978968633
+Terrenos                    30473583         7873523     22600060   287.0% |               0      -238058836    238058836
+Estructuras y caños              NA               0           NA     0.0% |              NA               0           NA
+Eq de Oficina              444599951       245329571    199270380    81.2% |       124362747       151349703    -26986956
+Maquinas y Equipos        6079878636     13582320140  -7502441504   -55.2% |      2617291411     10580595214  -7963303803
+Maquinas Mejoras             3628551         2401160      1227391    51.1% |               0               0            0
+MyU                        129277061       125239859      4037202     3.2% |        14946998        65522740    -50575742
+Rodados                   2309365705      4060883460  -1751517755   -43.1% |       937033041      3090663105  -2153630064
+Terreno Mejoras            582255373      1297996142   -715740769   -55.1% |       217864347       965026401   -747162054
+Software                   447869027       881821181   -433952154   -49.2% |       -52228873       603474400   -655703273
+TOTAL                    14120006908     29179928610 -15059921702   -51.6% |      5256163862     21594435551 -16338271689
+
+PG interna (s/prueba - s/revaluo): amort=221582191  vr=0
+
+============ 6-B02-pre1992 ============
+New names:
+• `` -> `...1`
+• `` -> `...2`
+• `` -> `...3`
+• `` -> `...4`
+New names:
+• `` -> `...5`
+• `` -> `...6`
+• `` -> `...7`
+• `` -> `...8`
+• `` -> `...9`
+• `` -> `...10`
+• `` -> `...11`
+• `` -> `...12`
+• `` -> `...13`
+New names:
+• `` -> `...1`
+• `` -> `...2`
+• `` -> `...3`
+• `` -> `...4`
+  Altas SAP cargadas: 3339
+  Bajas SAP cargadas: 1373
+  Transf SAP cargadas: 1583
+  Rubros en inventario: Cercos, Edificios, Terrenos, Eq de Oficina, Maquinas y Equipos, Maquinas Mejoras, MyU, Rodados, Terreno Mejoras, Software
+    Cercos: 9 activos, 0 movimientos 2023
+    Edificios: 4818 activos, 532 movimientos 2023
+    Terrenos: 25 activos, 0 movimientos 2023
+    Eq de Oficina: 18006 activos, 858 movimientos 2023
+    Maquinas y Equipos: 31634 activos, 3112 movimientos 2023
+    Maquinas Mejoras: 429 activos, 55 movimientos 2023
+    MyU: 7957 activos, 1374 movimientos 2023
+    Rodados: 7110 activos, 219 movimientos 2023
+    Terreno Mejoras: 1048 activos, 127 movimientos 2023
+    Software: 571 activos, 18 movimientos 2023
+
+--- COMPARACIÓN VS ESTUDIO 2023 ---
+Rubro                        Amort_R       Amort_Est        Dif_$    Dif_% |            VR_R          VR_Est        Dif_$    Dif_%
+Cercos                         96544            2550        93994  3686.0% |            5130            2580         2550    98.8%
+Edificios                  219374883        39733727    179641156   452.1% |      2694341408      2600198170     94143238     3.6%
+Terrenos                           0               0            0     0.0% |        30473583       245932359   -215458776   -87.6%
+Estructuras y caños              NA               0           NA     0.0% |              NA               0           NA     0.0%
+Eq de Oficina              325490061       104286242    221203819   212.1% |       320163208        93979868    226183340   240.7%
+Maquinas y Equipos        1674472322       404710723   1269761599   313.8% |      3462173545      3001724926    460448619    15.3%
+Maquinas Mejoras            16936730         1219750     15716980  1288.5% |         3628551         2401160      1227391    51.1%
+MyU                        215671375        44924626    170746749   380.1% |       114294304        59717119     54577185    91.4%
+Rodados                    618891802       316048703    302843099    95.8% |      1372332664       970220355    402112309    41.5%
+Terreno Mejoras             92516092        40837468     51678624   126.5% |       364391027       332969741     31421286     9.4%
+Software                   551137200       227761168    323376032   142.0% |       500097900       278346781    221751119    79.7%
+TOTAL                     3714587009      1179524957   2535062052   214.9% |      8861901319      7585493059   1276408260    16.8%
+
+Rubro                         VR_R_R        VR_R_Est        Dif_$    Dif_% |           AXI_R         AXI_Est        Dif_$
+Cercos                          5130            2580         2550    98.8% |               0               0            0
+Edificios                 4092653890      8976060994  -4883407104   -54.4% |      1396894191      6375862824  -4978968633
+Terrenos                    30473583         7873523     22600060   287.0% |               0      -238058836    238058836
+Estructuras y caños              NA               0           NA     0.0% |              NA               0           NA
+Eq de Oficina              444599951       245329571    199270380    81.2% |       124362747       151349703    -26986956
+Maquinas y Equipos        6079878636     13582320140  -7502441504   -55.2% |      2617291411     10580595214  -7963303803
+Maquinas Mejoras             3628551         2401160      1227391    51.1% |               0               0            0
+MyU                        129277061       125239859      4037202     3.2% |        14946998        65522740    -50575742
+Rodados                   2309365705      4060883460  -1751517755   -43.1% |       937033041      3090663105  -2153630064
+Terreno Mejoras            582255373      1297996142   -715740769   -55.1% |       217864347       965026401   -747162054
+Software                   447869027       881821181   -433952154   -49.2% |       -52228873       603474400   -655703273
+TOTAL                    14120006908     29179928610 -15059921702   -51.6% |      5256163862     21594435551 -16338271689
+
+PG interna (s/prueba - s/revaluo): amort=221582191  vr=0
+
+============ 7-V09-trim-ant ============
+New names:
+• `` -> `...1`
+• `` -> `...2`
+• `` -> `...3`
+• `` -> `...4`
+New names:
+• `` -> `...5`
+• `` -> `...6`
+• `` -> `...7`
+• `` -> `...8`
+• `` -> `...9`
+• `` -> `...10`
+• `` -> `...11`
+• `` -> `...12`
+• `` -> `...13`
+New names:
+• `` -> `...1`
+• `` -> `...2`
+• `` -> `...3`
+• `` -> `...4`
+  Altas SAP cargadas: 3339
+  Bajas SAP cargadas: 1373
+  Transf SAP cargadas: 1583
+  Rubros en inventario: Cercos, Edificios, Terrenos, Eq de Oficina, Maquinas y Equipos, Maquinas Mejoras, MyU, Rodados, Terreno Mejoras, Software
+    Cercos: 9 activos, 0 movimientos 2023
+    Edificios: 4818 activos, 532 movimientos 2023
+    Terrenos: 25 activos, 0 movimientos 2023
+    Eq de Oficina: 18006 activos, 858 movimientos 2023
+    Maquinas y Equipos: 31634 activos, 3112 movimientos 2023
+    Maquinas Mejoras: 429 activos, 55 movimientos 2023
+    MyU: 7957 activos, 1374 movimientos 2023
+    Rodados: 7110 activos, 219 movimientos 2023
+    Terreno Mejoras: 1048 activos, 127 movimientos 2023
+    Software: 571 activos, 18 movimientos 2023
+
+--- COMPARACIÓN VS ESTUDIO 2023 ---
+Rubro                        Amort_R       Amort_Est        Dif_$    Dif_% |            VR_R          VR_Est        Dif_$    Dif_%
+Cercos                         96544            2550        93994  3686.0% |            5130            2580         2550    98.8%
+Edificios                  219374883        39733727    179641156   452.1% |      2694341408      2600198170     94143238     3.6%
+Terrenos                           0               0            0     0.0% |        30473583       245932359   -215458776   -87.6%
+Estructuras y caños              NA               0           NA     0.0% |              NA               0           NA     0.0%
+Eq de Oficina              325490061       104286242    221203819   212.1% |       320163208        93979868    226183340   240.7%
+Maquinas y Equipos        1674472322       404710723   1269761599   313.8% |      3462173545      3001724926    460448619    15.3%
+Maquinas Mejoras            16936730         1219750     15716980  1288.5% |         3628551         2401160      1227391    51.1%
+MyU                        215671375        44924626    170746749   380.1% |       114294304        59717119     54577185    91.4%
+Rodados                    618891802       316048703    302843099    95.8% |      1372332664       970220355    402112309    41.5%
+Terreno Mejoras             92516092        40837468     51678624   126.5% |       364391027       332969741     31421286     9.4%
+Software                   551137200       227761168    323376032   142.0% |       500097900       278346781    221751119    79.7%
+TOTAL                     3714587009      1179524957   2535062052   214.9% |      8861901319      7585493059   1276408260    16.8%
+
+Rubro                         VR_R_R        VR_R_Est        Dif_$    Dif_% |           AXI_R         AXI_Est        Dif_$
+Cercos                          5130            2580         2550    98.8% |               0               0            0
+Edificios                 4092641009      8976060994  -4883419985   -54.4% |      1396894191      6375862824  -4978968633
+Terrenos                    30473583         7873523     22600060   287.0% |               0      -238058836    238058836
+Estructuras y caños              NA               0           NA     0.0% |              NA               0           NA
+Eq de Oficina              444599951       245329571    199270380    81.2% |       124362747       151349703    -26986956
+Maquinas y Equipos        6079878636     13582320140  -7502441504   -55.2% |      2617291411     10580595214  -7963303803
+Maquinas Mejoras             3628551         2401160      1227391    51.1% |               0               0            0
+MyU                        129277061       125239859      4037202     3.2% |        14946998        65522740    -50575742
+Rodados                   2309365705      4060883460  -1751517755   -43.1% |       937033041      3090663105  -2153630064
+Terreno Mejoras            582255373      1297996142   -715740769   -55.1% |       217864347       965026401   -747162054
+Software                   447869027       881821181   -433952154   -49.2% |       -52228873       603474400   -655703273
+TOTAL                    14119994027     29179928610 -15059934583   -51.6% |      5256163862     21594435551 -16338271689
+
+PG interna (s/prueba - s/revaluo): amort=221582191  vr=0
+
+
+================================================================
+RESUMEN TOTALES POR PASO
+================================================================
+Paso                         Amort_tot          VR_tot        VR_R_tot         AXI_tot     PG_int
+TOTAL                       6058382835      6518105494     33743946621     27197242871 8545642659
+TOTAL                       3753368734      8823119595     40543177548     31691459698  221581928
+TOTAL                       3753368734      8823119595     14093893605      5242175755  221581928
+TOTAL                       3753368734      8823119595     14110580290      5258862439  221581928
+TOTAL                       3714587009      8861901319     14120006908      5256163862  221582191
+TOTAL                       3714587009      8861901319     14120006908      5256163862  221582191
+TOTAL                       3714587009      8861901319     14120006908      5256163862  221582191
+TOTAL                       3714587009      8861901319     14119994027      5256163862  221582191
+ESTUDIO                     1179524957      7585493059     29179928610     21594435551
+
+Done.
