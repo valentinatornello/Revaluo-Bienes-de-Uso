@@ -250,10 +250,17 @@ leer_pg_real <- function(path_excel) {
     NULL
   }
 
-  extraer_serie <- function(hoja, fila, magnitud) {
+  # la fila de cada magnitud se busca por etiqueta (la posicion cambia de un anio a otro: en el manual 2022
+  # "s/revaluo" esta en la fila 21 y en el 2023 en la 20); la fila fija queda como respaldo
+  extraer_serie <- function(hoja, fila, magnitud, patron_etiqueta = NULL) {
     d <- leer_hoja(hoja)
     cols <- ubicar_rubros_en_columnas(d)
     if (!is.null(cols) && nrow(d) >= fila) {
+      if (!is.null(patron_etiqueta)) {
+        etiquetas <- apply(d, 1, function(x) { v <- x[!is.na(x)]; if (length(v)) as.character(v[1]) else "" })
+        fila_etiqueta <- which(grepl(patron_etiqueta, etiquetas, ignore.case = TRUE))[1]
+        if (!is.na(fila_etiqueta)) fila <- fila_etiqueta
+      }
       return(a_numerico(unlist(d[fila, ], use.names = FALSE), cols))
     }
     serie <- extraer_serie_tabular(d, magnitud)
@@ -268,11 +275,20 @@ leer_pg_real <- function(path_excel) {
     ), call. = FALSE)
   }
 
-  vr_revaluo <- extraer_serie("PG", 35, "vr_revaluo")
-  vr_revaluo_reexp <- extraer_serie("PG AXI", 36, "vr_reexp")
+  # "Amortizacion s/revaluo" del manual es la amortizacion DEL EJERCICIO (suma de "Amort. Historica"),
+  # no la acumulada; "Valor residual s/revaluo" es el VR al cierre.
+  patron_amort <- "^Amortizaci.n s/ ?rev"
+  patron_vr <- "^Valor residual *s?/ ?rev"
+  vr_revaluo <- extraer_serie("PG", 35, "vr_revaluo", patron_vr)
+  vr_revaluo_reexp <- extraer_serie("PG AXI", 36, "vr_reexp", patron_vr)
 
   list(
-    amort_revaluo = extraer_serie("PG", 19, "amort_revaluo"),
+    amort_revaluo = extraer_serie("PG", 19, "amort_revaluo", patron_amort),
+    # amortizacion reexpresada del ejercicio (PG AXI); NULL si el archivo no la trae (exportaciones antiguas)
+    amort_reexp_revaluo = tryCatch(
+      extraer_serie("PG AXI", 20, "amort_ejercicio_reexp", patron_amort),
+      error = function(e) NULL
+    ),
     vr_revaluo = vr_revaluo,
     axi_resultado = vr_revaluo_reexp - vr_revaluo
   )
@@ -289,7 +305,7 @@ buscar_archivo_real <- function(anio_ejercicio, dir_parametros = file.path("inpu
   archivos[1]
 }
 
-leer_movimientos_sap <- function(path_sap) {
+leer_movimientos_sap <- function(path_sap, anio_ejercicio = NULL) {
   altas_excel <- readxl::read_excel(path_sap, sheet = "Altas")
   bajas_excel <- readxl::read_excel(path_sap, sheet = "Bajas")
   transf_excel <- readxl::read_excel(path_sap, sheet = "Transferencias")
@@ -343,12 +359,7 @@ leer_movimientos_sap <- function(path_sap) {
       es_fila_detalle_sap(nro_activo),
       !is.na(rubro),
       rubro != "Obras en curso",
-      !grepl("^AS", nro_activo, ignore.case = TRUE),
-      # Ret. book value (col. M) = Retirement (col. K) + Depr. retired (col. L).
-      # Solo se reconoce la baja cuando el bien queda totalmente depreciado (M = 0).
-      # PENDIENTE: consultar con Pablo el tratamiento de las filas con M != 0
-      # (quedan excluidas del rollforward hasta esa definición).
-      abs(ret_book_value) < 0.01
+      !grepl("^AS", nro_activo, ignore.case = TRUE)
     )
 
   transf_raw <- transf_excel %>%
@@ -377,13 +388,25 @@ leer_movimientos_sap <- function(path_sap) {
       !grepl("^AS", nro_activo, ignore.case = TRUE)
     )
 
+  # filas_detalle cuenta las filas de detalle del archivo SAP antes de filtrar por rubro (el conteo esperado
+  # es el del archivo); filas_importadas son las que quedan tras excluir rubros fuera de tabla, obras en curso e IFRS 16.
+  contar_detalle <- function(hoja) {
+    sum(es_fila_detalle_sap(janitor::clean_names(hoja)$asset))
+  }
+  conteos_anio <- if (is.null(anio_ejercicio)) {
+    CONTEOS_MOVIMIENTOS_ESPERADOS[0, c("tipo_movimiento_sap", "conteo_esperado")]
+  } else {
+    dplyr::filter(CONTEOS_MOVIMIENTOS_ESPERADOS, anio == anio_ejercicio) %>%
+      dplyr::select(tipo_movimiento_sap, conteo_esperado)
+  }
   auditoria_movimientos <- tibble::tibble(
     tipo_movimiento_sap = c("alta", "baja", "transferencia"),
     filas_fuente = c(nrow(altas_excel), nrow(bajas_excel), nrow(transf_excel)),
-    filas_detalle = c(nrow(altas_raw), nrow(bajas_raw), nrow(transf_raw)),
-    filas_excluidas = filas_fuente - filas_detalle
+    filas_detalle = c(contar_detalle(altas_excel), contar_detalle(bajas_excel), contar_detalle(transf_excel)),
+    filas_importadas = c(nrow(altas_raw), nrow(bajas_raw), nrow(transf_raw)),
+    filas_excluidas = filas_detalle - filas_importadas
   ) %>%
-    dplyr::left_join(CONTEOS_MOVIMIENTOS_ESPERADOS, by = "tipo_movimiento_sap") %>%
+    dplyr::left_join(conteos_anio, by = "tipo_movimiento_sap") %>%
     dplyr::mutate(diferencia_conteo = filas_detalle - conteo_esperado)
 
   list(
@@ -394,21 +417,74 @@ leer_movimientos_sap <- function(path_sap) {
   )
 }
 
-importar_datos <- function(path_excel_ly, inputs_dir = "inputs") {
+# Elige el archivo SAP del ejercicio: el indicado explicitamente, o el que lleva el anio en el nombre
+# (ej. "Altas-bajas-Transf 12-2023 (Tax).xlsx"); si ninguno lo lleva, el mas reciente. Si el nombre trae otro
+# anio se frena: sumar los movimientos de otro ejercicio duplica o pierde movimientos sin avisar.
+elegir_archivo_sap <- function(dir_sap, anio_ejercicio = NULL, path_sap = NULL) {
+  if (is.null(path_sap)) {
+    archivos <- list.files(dir_sap, pattern = "\\.xlsx$", full.names = TRUE)
+    archivos <- archivos[!grepl("^~\\$", basename(archivos))]
+    if (length(archivos) == 0) return(NA_character_)
+    con_anio <- if (is.null(anio_ejercicio)) archivos[0] else
+      archivos[grepl(as.character(anio_ejercicio), basename(archivos), fixed = TRUE)]
+    candidatos <- if (length(con_anio) > 0) con_anio else archivos
+    path_sap <- candidatos[order(file.mtime(candidatos), decreasing = TRUE)][1]
+  }
+  if (!is.null(anio_ejercicio)) {
+    anios_nombre <- as.integer(regmatches(basename(path_sap), gregexpr("20[0-9]{2}", basename(path_sap)))[[1]])
+    if (length(anios_nombre) > 0 && !anio_ejercicio %in% anios_nombre) {
+      stop(sprintf(
+        paste0("El archivo SAP '%s' parece ser del ejercicio %s y se esta calculando %d. ",
+               "Subi el 'Altas-bajas-Transf' del ejercicio %d."),
+        basename(path_sap), paste(unique(anios_nombre), collapse = "/"), anio_ejercicio, anio_ejercicio
+      ), call. = FALSE)
+    }
+  }
+  path_sap
+}
+
+# Las altas y transferencias del ejercicio se reexpresan con el IPC del mes de alta: si la tabla no llega al
+# cierre del ejercicio esos bienes toman coeficiente 1 (el ultimo valor disponible) sin ningun aviso.
+validar_cobertura_ipc <- function(indices_ipc, anio_ejercicio) {
+  cierre <- as.Date(sprintf("%d-12-31", anio_ejercicio))
+  ultimo <- suppressWarnings(max(indices_ipc$fecha, na.rm = TRUE))
+  if (!is.finite(as.numeric(ultimo)) || ultimo < cierre) {
+    stop(sprintf(
+      paste0("La tabla IPC llega hasta %s y el ejercicio %d cierra el %s. ",
+             "Copia un Excel con las hojas 'IPC' e 'IPC - VR Bajas' a inputs/parametros/indices_ipc_%d.xlsx."),
+      format(ultimo), anio_ejercicio, format(cierre), anio_ejercicio
+    ), call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
+importar_datos <- function(path_excel_ly, inputs_dir = "inputs", anio_ejercicio = NULL, path_sap = NULL) {
   rutas <- obtener_rutas_inputs(inputs_dir)
 
   inventario_ly <- leer_inventario_categorias(path_excel_ly)
-  indices_ipc <- leer_indices_ipc(path_excel_ly)
   indices_ipim <- leer_indices_ipim(path_excel_ly)
-  indices_ipc_bajas <- leer_indices_ipc_bajas(path_excel_ly)
   indices_ipim_bajas <- leer_indices_ipim_bajas(path_excel_ly)
+  # Los indices IPC del ejercicio (hasta el 31/12 del anio) no estan en el Excel del anio anterior: si existe
+  # inputs/parametros/indices_ipc_<anio>.xlsx (hojas "IPC" y "IPC - VR Bajas") se usan esos.
+  path_indices <- if (!is.null(anio_ejercicio)) {
+    file.path(rutas$parametros, sprintf("indices_ipc_%d.xlsx", anio_ejercicio))
+  } else {
+    NA_character_
+  }
+  if (!is.na(path_indices) && file.exists(path_indices)) {
+    indices_ipc <- leer_indices_ipc(path_indices)
+    indices_ipc_bajas <- leer_indices_ipc_bajas(path_indices)
+  } else {
+    indices_ipc <- leer_indices_ipc(path_excel_ly)
+    indices_ipc_bajas <- leer_indices_ipc_bajas(path_excel_ly)
+  }
+  if (!is.null(anio_ejercicio)) validar_cobertura_ipc(indices_ipc, anio_ejercicio)
   excepciones_fecha_base <- leer_excepciones_fecha_base(rutas$parametros)
 
-  archivos_sap <- list.files(rutas$sap, pattern = "\\.xlsx$", full.names = TRUE)
-  archivos_sap <- archivos_sap[!grepl("^~\\$", basename(archivos_sap))]
+  archivo_sap <- elegir_archivo_sap(rutas$sap, anio_ejercicio, path_sap)
 
-  if (length(archivos_sap) > 0) {
-    movimientos <- leer_movimientos_sap(archivos_sap[1])
+  if (!is.na(archivo_sap)) {
+    movimientos <- leer_movimientos_sap(archivo_sap, anio_ejercicio)
   } else {
     movimientos <- list(
       altas = tibble::tibble(),
@@ -425,6 +501,7 @@ importar_datos <- function(path_excel_ly, inputs_dir = "inputs") {
     indices_ipc_bajas  = indices_ipc_bajas,
     indices_ipim_bajas = indices_ipim_bajas,
     excepciones_fecha_base = excepciones_fecha_base,
+    archivo_sap        = if (is.na(archivo_sap)) NA_character_ else basename(archivo_sap),
     altas              = movimientos$altas,
     bajas              = movimientos$bajas,
     transferencias     = movimientos$transferencias,

@@ -7,6 +7,7 @@ ejecutar_validaciones <- function(datos_pg, pg_real = NULL, tolerancia_externa =
   val_pg_vr <- validar_pg_valor_residual(prueba_global$valor_residual)
   val_vr_formula <- validar_vr_formula(resultado_axi)
   val_movimientos <- validar_conteos_movimientos(datos_pg$auditoria_movimientos)
+  val_bajas_no_id <- validar_bajas_no_identificadas(datos_pg$bajas_no_identificadas)
   val_valores_negativos <- validar_valores_reexpresados_negativos(resultado_axi)
   val_excepciones_fecha <- validar_excepciones_fecha_base(resultado_axi)
   val_contra_real <- validar_contra_real(prueba_global, pg_real, tolerancia_externa)
@@ -17,6 +18,7 @@ ejecutar_validaciones <- function(datos_pg, pg_real = NULL, tolerancia_externa =
     val_pg_vr,
     val_vr_formula,
     val_movimientos,
+    val_bajas_no_id,
     val_valores_negativos,
     val_excepciones_fecha,
     val_contra_real
@@ -156,6 +158,16 @@ validar_pg_valor_residual <- function(pg_vr) {
   }
 }
 
+# OK = replica el Excel (diferencia <= UMBRAL_REPLICA_EXTERNA); ADVERTENCIA = dentro de la tolerancia pero no lo
+# replica (la tolerancia del 20% por si sola daba OK a diferencias de millones); ERROR = fuera de la tolerancia
+resultado_comparacion <- function(pct, tolerancia_pct) {
+  dplyr::case_when(
+    pct <= UMBRAL_REPLICA_EXTERNA ~ "OK",
+    pct <= tolerancia_pct ~ "ADVERTENCIA",
+    TRUE ~ "ERROR"
+  )
+}
+
 validar_contra_real <- function(prueba_global, pg_real, tolerancia_pct = TOLERANCIA_VALIDACION_EXTERNA) {
   if (is.null(pg_real)) {
     return(tibble::tibble(
@@ -177,6 +189,8 @@ validar_contra_real <- function(prueba_global, pg_real, tolerancia_pct = TOLERAN
     filas_rubro <- purrr::map_dfr(rubros, function(r) {
       propio <- obtener_valor(propio_named, r)
       real <- obtener_valor(real_named, r)
+      # rubro sin datos propios (ej. Estructuras y caños, en desuso) y en 0 en la referencia: coinciden
+      if (is.na(propio) && !is.na(real) && abs(real) <= TOLERANCIA_CONSISTENCIA_INTERNA) propio <- 0
       diferencia <- propio - real
 
       if (is.na(propio) || is.na(real)) {
@@ -209,7 +223,7 @@ validar_contra_real <- function(prueba_global, pg_real, tolerancia_pct = TOLERAN
           "%s [%s]: propio=%.0f | Price=%.0f | dif=%.0f | %.1f%% de diferencia (tolerancia %.0f%%, %.1f%% de igualdad)",
           nombre_magnitud, r, propio, real, diferencia, pct * 100, tolerancia_pct * 100, (1 - pct) * 100
         ),
-        resultado = ifelse(pct <= tolerancia_pct, "OK", "ERROR"),
+        resultado = resultado_comparacion(pct, tolerancia_pct),
         valor = pct
       )
     })
@@ -232,7 +246,7 @@ validar_contra_real <- function(prueba_global, pg_real, tolerancia_pct = TOLERAN
         "%s [TOTAL]: propio=%.0f | Price=%.0f | dif=%.0f | %.1f%% de diferencia (tolerancia %.0f%%, %.1f%% de igualdad)",
         nombre_magnitud, propio_total, real_total, diferencia_total, pct_total * 100, tolerancia_pct * 100, (1 - pct_total) * 100
       ),
-      resultado = ifelse(pct_total <= tolerancia_pct, "OK", "ERROR"),
+      resultado = resultado_comparacion(pct_total, tolerancia_pct),
       valor = pct_total
     )
 
@@ -243,11 +257,18 @@ validar_contra_real <- function(prueba_global, pg_real, tolerancia_pct = TOLERAN
   vr_propio <- stats::setNames(prueba_global$valor_residual$vr_revaluo, prueba_global$valor_residual$rubro)
   axi_propio <- stats::setNames(prueba_global$axi$axi_resultado, prueba_global$axi$rubro)
 
-  dplyr::bind_rows(
+  comparaciones <- list(
     comparar_magnitud("Amortizacion", amort_propio, pg_real$amort_revaluo),
     comparar_magnitud("Valor Residual", vr_propio, pg_real$vr_revaluo),
     comparar_magnitud("AXI", axi_propio, pg_real$axi_resultado)
   )
+  if (!is.null(pg_real$amort_reexp_revaluo) && "amort_ejercicio_reexp" %in% names(prueba_global$axi)) {
+    amort_reexp_propio <- stats::setNames(prueba_global$axi$amort_ejercicio_reexp, prueba_global$axi$rubro)
+    comparaciones <- append(comparaciones, list(
+      comparar_magnitud("Amortizacion AXI", amort_reexp_propio, pg_real$amort_reexp_revaluo)
+    ))
+  }
+  dplyr::bind_rows(comparaciones)
 }
 
 validar_vr_formula <- function(resultado_axi) {
@@ -306,6 +327,16 @@ validar_conteos_movimientos <- function(auditoria_movimientos) {
   diferencias <- auditoria_movimientos %>%
     dplyr::filter(!is.na(conteo_esperado), diferencia_conteo != 0)
 
+  if (all(is.na(auditoria_movimientos$conteo_esperado))) {
+    return(tibble::tibble(
+      tipo = "conteos_movimientos_sap",
+      rubro = "TODOS",
+      descripcion = "No hay conteos esperados para este ejercicio (CONTEOS_MOVIMIENTOS_ESPERADOS en utils.R); conteo omitido",
+      resultado = "ADVERTENCIA",
+      valor = NA_real_
+    ))
+  }
+
   if (nrow(diferencias) == 0) {
     return(tibble::tibble(
       tipo = "conteos_movimientos_sap",
@@ -329,6 +360,35 @@ validar_conteos_movimientos <- function(auditoria_movimientos) {
   )
 }
 
+# Regla 2: las bajas SAP de activos que no estan en la base (ni son altas del ejercicio) no se calculan; se informan
+# para detallarlas al final del rubro con su numero de activo.
+validar_bajas_no_identificadas <- function(bajas_no_identificadas) {
+  if (is.null(bajas_no_identificadas) || nrow(bajas_no_identificadas) == 0) {
+    return(tibble::tibble(
+      tipo = "bajas_no_identificadas",
+      rubro = "TODOS",
+      descripcion = "Todas las bajas SAP se identifican en la base",
+      resultado = "OK",
+      valor = 0
+    ))
+  }
+
+  por_rubro <- bajas_no_identificadas %>%
+    dplyr::group_by(rubro) %>%
+    dplyr::summarise(n = dplyr::n_distinct(nro_activo), valor = sum(abs(valor), na.rm = TRUE), .groups = "drop")
+
+  tibble::tibble(
+    tipo = "bajas_no_identificadas",
+    rubro = por_rubro$rubro,
+    descripcion = sprintf(
+      "%d activos dados de baja en SAP no estan en la base ni son altas del ejercicio (valor retirado %.0f): no se calculan",
+      por_rubro$n, por_rubro$valor
+    ),
+    resultado = "ADVERTENCIA",
+    valor = por_rubro$n
+  )
+}
+
 validar_valores_reexpresados_negativos <- function(resultado_axi) {
   validaciones <- list()
 
@@ -340,17 +400,20 @@ validar_valores_reexpresados_negativos <- function(resultado_axi) {
       d$direccion_movimiento <- NA_character_
     }
 
+    # Un VO negativo es una reversa o una transferencia de salida (el Excel del estudio tiene esas filas): esta
+    # justificado que su VR/VO reexpresado sea negativo. Solo se marca el negativo que NO viene de un VO negativo.
     negativos <- d %>%
       dplyr::filter(
         tipo_movimiento_calc != "transferencia" | is.na(direccion_movimiento) | direccion_movimiento != "salida",
-        vo_reexp < 0 | vr_reexp < 0
+        vo >= 0,
+        vo_reexp < -TOLERANCIA_CONSISTENCIA_INTERNA | vr_reexp < -TOLERANCIA_CONSISTENCIA_INTERNA
       )
 
     if (nrow(negativos) > 0) {
       validaciones <- append(validaciones, list(tibble::tibble(
         tipo = "valores_reexpresados_negativos",
         rubro = rubro,
-        descripcion = sprintf("VO/VR reexpresado negativo en %d activos", nrow(negativos)),
+        descripcion = sprintf("VO/VR reexpresado negativo sin VO negativo en %d activos", nrow(negativos)),
         resultado = "ERROR",
         valor = nrow(negativos)
       )))
@@ -361,7 +424,7 @@ validar_valores_reexpresados_negativos <- function(resultado_axi) {
     return(tibble::tibble(
       tipo = "valores_reexpresados_negativos",
       rubro = "TODOS",
-      descripcion = "No hay VO/VR reexpresados negativos no justificados",
+      descripcion = "No hay VO/VR reexpresados negativos no justificados (los negativos provienen de VO negativos: reversas y transferencias de salida)",
       resultado = "OK",
       valor = 0
     ))

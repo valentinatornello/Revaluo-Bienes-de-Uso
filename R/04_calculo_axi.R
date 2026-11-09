@@ -57,29 +57,32 @@ calcular_rubro_amortizable <- function(inv, rubro_nombre, indices_ipc, indices_i
 
   inv <- aplicar_excepciones_fecha_base(inv, excepciones_fecha_base)
 
-  trim_primer_anio <- if (rubro_nombre == "Edificios") {
+  trim_primer_anio <- if (periodos_por_anio == 4L) {
     calcular_trimestres_primer_anio(inv$mes_alta)
   } else {
     rep.int(1L, nrow(inv))
   }
   periodos_hasta_baja <- rep.int(periodos_por_anio, nrow(inv))
-  es_baja_edificio <- rubro_nombre == "Edificios" &
-    inv$tipo_movimiento_calc == "baja" & !is.na(inv$fecha_baja)
-  periodos_hasta_baja[es_baja_edificio] <-
-    as.integer(floor((lubridate::month(inv$fecha_baja[es_baja_edificio]) - 1L) / 3L) + 1L)
+  es_baja_trimestral <- periodos_por_anio == 4L &
+    inv$tipo_movimiento_calc %in% "baja" & !is.na(inv$fecha_baja)
+  periodos_hasta_baja[es_baja_trimestral] <-
+    as.integer(floor((lubridate::month(inv$fecha_baja[es_baja_trimestral]) - 1L) / 3L) + 1L)
+
+  # Excel manual: VUT LY = MIN(VU, anio_ejercicio - anio_alta) para rubros anuales; los trimestrales
+  # cuentan trimestres desde el trimestre de alta.
+  vut_ly_calculada <- if (periodos_por_anio == 4L) {
+    calcular_vut_ly(inv$anio_alta, inv$mes_alta, anio_ejercicio, inv$vu_asignada)
+  } else {
+    pmin(inv$vu_asignada, pmax(anio_ejercicio - inv$anio_alta, 0L))
+  }
 
   inv <- inv %>%
     dplyr::mutate(
-      # Edificios devenga por trimestre; los otros rubros, por año.
+      # Los rubros trimestrales devengan por trimestre; los anuales, por anio completo.
       trim_primer_anio = trim_primer_anio,
       periodos_hasta_baja = periodos_hasta_baja,
 
-      vut_ly = dplyr::if_else(
-        !is.na(vut_ly),
-        vut_ly,
-        calcular_vut_ly(anio_alta, mes_alta, anio_ejercicio, vu_asignada) /
-          4L * periodos_por_anio
-      ),
+      vut_ly = dplyr::if_else(!is.na(vut_ly), vut_ly, vut_ly_calculada),
 
       vut_ejercicio = pmin(
         dplyr::if_else(
@@ -138,7 +141,7 @@ calcular_rubro_amortizable <- function(inv, rubro_nombre, indices_ipc, indices_i
         1
       ),
 
-      coef_ipim = buscar_coeficiente(fecha_indice_reexp, indices_ipim),
+      coef_ipim = coeficiente_pre_2018(fecha_indice_reexp, indices_ipim),
 # EVALUAR SI ES EL IPC O EL IPIM EL COEFICIENTE AL QUE TENEMOS QUE MULTIPLICAR EL VO DE LOS BIENES DADOS DE BAJA, SEGUN EL ANIO DE ALTA
       vo_reexp = dplyr::if_else(
         anio_alta >= ANIO_CORTE_REVALUO,
@@ -150,6 +153,14 @@ calcular_rubro_amortizable <- function(inv, rubro_nombre, indices_ipc, indices_i
         anio_alta >= ANIO_CORTE_REVALUO,
         amort_hist_2018 * coef_ipc,
         0
+      ),
+
+      # "Amort. Reexp." del Excel: amortizacion del ejercicio por el coeficiente de cada bien (los anteriores a 2018
+      # llevan su coeficiente, que es 1 salvo criterio IPIM); es la base de "Amortizacion s/revaluo" de la PG AXI.
+      amort_ejercicio_reexp = amort_hist_ejercicio * dplyr::if_else(
+        anio_alta >= ANIO_CORTE_REVALUO,
+        coef_ipc,
+        coef_ipim
       ),
 
       amort_acum_ly_reexp = dplyr::if_else(
@@ -221,7 +232,7 @@ calcular_terrenos <- function(inv, indices_ipc, indices_ipim, anio_ejercicio,
   inv <- inv %>%
     dplyr::mutate(
       coef_ipc = buscar_coeficiente(fecha_indice_reexp, indices_ipc),
-      coef_ipim = buscar_coeficiente(fecha_indice_reexp, indices_ipim),
+      coef_ipim = coeficiente_pre_2018(fecha_indice_reexp, indices_ipim),
 
       vo_reexp = dplyr::if_else(
         anio_alta >= ANIO_CORTE_REVALUO,
@@ -231,6 +242,7 @@ calcular_terrenos <- function(inv, indices_ipc, indices_ipim, anio_ejercicio,
       amort_hist_reexp = 0,
       amort_acum_ly_reexp = 0,
       amort_acum_cierre_reexp = 0,
+      amort_ejercicio_reexp = 0,
       vr_reexp = vo_reexp,
 
       amort_bajas = 0,

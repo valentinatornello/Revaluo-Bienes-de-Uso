@@ -160,13 +160,13 @@
 |---|---|
 | Definición | Vida útil total del bien según su rubro. Determina el período total de amortización |
 | Tipo | Parámetro |
-| Origen del dato | Tabla `PARAMETROS_RUBROS` (`utils.R:27-39`) vía `obtener_vu_asignada()` (`utils.R:199-208`). Si el inventario LY trae una columna "VU Asignada", se usa esa (con ajuste: para Edificios se toma tal cual, para otros se divide por 4) (`02_limpiar_datos.R:87-93`) |
-| Fórmula (notación) | **Edificios:** `VU = vu_trimestres` (200). **Otros:** `VU = vu_anios` (3, 5, 10, 50). **Terrenos:** `VU = 0` |
-| Fórmula explicada | Edificios trabaja en trimestres (200 trim = 50 años). Todos los demás rubros trabajan en años. Terrenos no amortizan (VU=0). La función `obtener_vu_asignada()` retorna el valor en la unidad operativa del rubro |
-| Unidad | Trimestres (Edificios) / Años (otros rubros) |
+| Origen del dato | Tabla `PARAMETROS_RUBROS` (`utils.R`) vía `obtener_vu_asignada()`. Si el inventario LY trae una columna "VU Asignada", se usa esa llevada a la unidad del criterio con `factor_unidad_archivo()` (Edificios viene en trimestres, el resto en años: con el criterio `"excel"` no se convierte nada; con `"ricardo"` se multiplica por 4 lo que pasa a trimestres) (`02_limpiar_datos.R`) |
+| Fórmula (notación) | **Trimestral** (Edificios; con criterio `"ricardo"` también todos salvo Rodados): `VU = vu_trimestres`. **Anual** (resto con criterio `"excel"`, y Rodados siempre): `VU = vu_anios` (3, 5, 10, 50). **Terrenos:** `VU = 0` |
+| Fórmula explicada | La unidad la define `obtener_periodos_por_anio()` (4 trimestral, 1 anual) según el criterio vigente (`options(revaluo.criterio_unidad_vu)`). Terrenos no amortizan (VU=0). `obtener_vu_asignada()` retorna el valor en la unidad operativa del rubro |
+| Unidad | Trimestres o años según rubro y criterio |
 | Redondeo | No aplica |
-| Casos borde | **Edificios vs LY:** si el LY trae `vu_asignada` para Edificios, se toma tal cual (asumiendo que ya está en trimestres, `02_limpiar_datos.R:91`). Para otros rubros, el valor del LY se divide por 4 (`02_limpiar_datos.R:91`). **VU = 0** (Terrenos): la amortización queda en 0, evitando división por cero |
-| Ubicación en R | `utils.R:27-39` (tabla), `utils.R:199-208` (`obtener_vu_asignada`), `02_limpiar_datos.R:87-93` |
+| Casos borde | **VU = 0** (Terrenos): la amortización queda en 0, evitando división por cero. Se corrigió el `/ 4` que se aplicaba al LY de los rubros no Edificios: el Excel los trae en años, no en trimestres |
+| Ubicación en R | `utils.R` (`PARAMETROS_RUBROS`, `criterio_unidad_vu`, `obtener_periodos_por_anio`, `factor_unidad_archivo`, `obtener_vu_asignada`), `02_limpiar_datos.R` |
 | Equivalente en el modelo del estudio | Columna "VU Asignada" por hoja |
 | Coincide con la referencia | **Sí** — los valores coinciden con la tabla 4.2 del spec. Para Rodados: spec dice VU=5 años, 20 trimestres, pero la unidad usada es años. El R usa `vu_anios=5` para Rodados, que coincide |
 | Norma | Ley de Ganancias: inmuebles (Edificios) 2% anual = 50 años = 200 trimestres. Bienes muebles: amortización anual, VU en años enteros. Terrenos no amortizan |
@@ -181,12 +181,12 @@
 | Definición | Cantidad de períodos amortizados hasta el 31/12 del año anterior al ejercicio |
 | Tipo | Dato de entrada / Calculado |
 | Origen del dato | **Inventario LY:** columna "VUT LY" si existe (`02_limpiar_datos.R:95-99`). **Si no existe:** se calcula con `calcular_vut_ly()` y se convierte a la unidad del rubro |
-| Fórmula (notación) | Si no viene del LY: `VUT_LY_trim = (AÑO_EJERCICIO - AA_ANIO - 1) × 4 + TPA_edificios`. Luego: `VUT_LY = VUT_LY_trim / 4 × periodos_por_anio`. Si alta es del año actual: `VUT_LY = 0` |
-| Fórmula explicada | 1. `calcular_vut_ly()` (`utils.R:162-171`) calcula en trimestres: años completos anteriores × 4 + trimestres del primer año. Aplica tope con `pmin(vut, vu_asignada)`. 2. En `04_calculo_axi.R:80-81`: el resultado se divide por 4 y se multiplica por `periodos_por_anio` (4 para Edificios, 1 para otros). Para Edificios: queda en trimestres. Para otros: queda en años. 3. Si el LY trae el valor, se usa directamente |
-| Unidad | Trimestres (Edificios) / Años (otros rubros) |
+| Fórmula (notación) | Si no viene del LY, **trimestral:** `VUT_LY = min((AÑO_EJERCICIO - AA_ANIO - 1) × 4 + TPA, VU)`; **anual (Excel manual):** `VUT_LY = min(VU, AÑO_EJERCICIO - AA_ANIO)`. Si alta es del año actual: `VUT_LY = 0` |
+| Fórmula explicada | 1. Rubros trimestrales: `calcular_vut_ly()` (`utils.R`) cuenta años completos anteriores × 4 + trimestres del primer año, con tope en VU. 2. Rubros anuales: se aplica directamente la fórmula del Excel manual (entero, sin fracciones). 3. Si el LY trae el valor, se usa directamente (llevado a la unidad del criterio con `factor_unidad_archivo()`) |
+| Unidad | Trimestres o años según rubro y criterio |
 | Redondeo | No explícito. `pmin()` trunca al máximo de VU |
-| Casos borde | **Alta del año actual:** VUT_LY = 0. **VU agotada:** `pmin` limita a VU máxima. **LY disponible vs calculado:** si el LY trae VUT_LY, se usa ese valor; la conversión de trimestres del cálculo solo aplica si el dato no viene del archivo |
-| Ubicación en R | `utils.R:162-171` (cálculo), `04_calculo_axi.R:77-82` (asignación) |
+| Casos borde | **Alta del año actual:** VUT_LY = 0. **VU agotada:** `pmin` limita a VU máxima. **LY disponible vs calculado:** si el LY trae VUT_LY, se usa ese valor |
+| Ubicación en R | `utils.R` (`calcular_vut_ly`), `04_calculo_axi.R` (`vut_ly_calculada`) |
 | Equivalente en el modelo del estudio | Columna "VUT LY" por hoja |
 | Coincide con la referencia | **Parcial (ERROR en no-Edificios)** — Para Edificios: algebraicamente correcto. Para no-Edificios: el cálculo pasa por trimestres y divide por 4, generando **fracciones** (ej: 2.25, 2.50, 2.75 años). Ver B-04 en `docs/07_impacto_brechas.md` |
 | Norma | Ley de Ganancias: bienes muebles → VUT en años enteros. Año de alta = año completo. Correcto: `VUT_LY = anio_ejercicio - anio_alta` (sin pasar por trimestres). Edificios: VUT en trimestres, trimestre de alta completo |

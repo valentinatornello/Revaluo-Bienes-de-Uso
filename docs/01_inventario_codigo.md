@@ -26,8 +26,9 @@ El proyecto contiene 12 archivos de código R: 8 módulos del pipeline en `R/`, 
 | `calcular_vut_ejercicio()` | 173 | VUT devengada en el ejercicio |
 | `buscar_coeficiente()` | 182 | Lookup de coeficiente IPC/IPIM por fecha |
 | `obtener_vu_trimestres()` | 194 | VU en trimestres desde PARAMETROS_RUBROS |
-| `obtener_vu_asignada()` | 199 | VU operativa: trimestres para Edificios, años para los demás |
-| `obtener_periodos_por_anio()` | 210 | 4 para Edificios, 1 para el resto |
+| `obtener_vu_asignada()` | 199 | VU operativa en la unidad del criterio vigente (trimestres o años según rubro) |
+| `obtener_periodos_por_anio()` | 210 | 4 si el rubro devenga por trimestre, 1 si es anual (según `criterio_unidad_vu()`) |
+| `factor_unidad_archivo()` | 195 | Factor para llevar VU/VUT LY del Excel LY (trimestres en Edificios, años en el resto) a la unidad del criterio |
 | `es_terreno()` | 214 | Retorna TRUE si rubro == "Terrenos" |
 
 **Constantes y tablas:**

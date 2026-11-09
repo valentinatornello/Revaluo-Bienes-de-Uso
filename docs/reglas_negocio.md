@@ -6,13 +6,13 @@ El cálculo del Revalúo de Bienes de Uso es una obligación impositiva argentin
 
 ## Reglas generales
 
-1. Si el bien se adquirió antes de 2018, NO se revalúan con IPC las amortizaciones ni VO (quedan a valores históricos). Se usa IPIM para la confiscatoriedad.
+1. Si el bien se adquirió antes de 2018, NO se revalúan con IPC las amortizaciones ni VO (quedan a valores históricos). Se usa IPIM para la confiscatoriedad. En el código el coeficiente de los bienes pre-2018 es 1 por defecto (Excel manual 2023: `=SI(año<2018;1;IPC)`); con `options(revaluo.coef_pre2018 = "ipim")` usa el IPIM del Excel 2022.
 2. Si se informan bajas de bienes que no se identifican en la base, se detallan al final del rubro con el número de asset.
 3. Assets cuyo nombre empieza con "AS" son operaciones IFRS16 y se excluyen del cálculo de revalúo.
-4. La VU se expresa en trimestres. Se considera el mes de alta para evaluar trimestres transcurridos.
+4. La VU se expresa en trimestres. Se considera el mes de alta para evaluar trimestres transcurridos. En el código esto es el criterio `"ricardo"` (`options(revaluo.criterio_unidad_vu = "ricardo")`, o `CRITERIO_UNIDAD_VU=ricardo` en `_targets.R`): todos los rubros en trimestres salvo Rodados (años, SPEC 4.2). El criterio por defecto, `"excel"`, replica las fórmulas del Excel manual del estudio (Edificios en trimestres, el resto en años) para poder comparar contra él.
 5. Los terrenos NO se amortizan.
 6. Si VU Transcurrida = VU Asignada, el bien ya no se amortiza más.
-7. Revisar si altas están en bajas del mismo año y netear.
+7. Revisar si altas están en bajas del mismo año y netear. En el código: un activo con baja en el ejercicio sale por completo (base, altas y transferencias del ejercicio) y la baja queda como fila propia; las altas conservan el signo de SAP (las reversas restan). Pendiente confirmar el tratamiento de bajas parciales (`docs/15_proceso_manual_revaluo.md` pide prorratear; el Excel 2023 saca el activo completo).
 8. Discriminar cálculos entre antes y después de 2018.
 
 ## Vidas útiles por rubro
