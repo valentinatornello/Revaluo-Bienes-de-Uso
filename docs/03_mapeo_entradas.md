@@ -19,7 +19,7 @@ Cada hoja tiene un header en una fila variable (ver `FILAS_HEADER`, `01_importar
 | `^a.*o.*alta$` | `anio_alta` | integer | `as.integer()`. Si no existe, se calcula como `year(fecha_alta)` |
 | `mes.*alta` | `mes_alta` | integer | `as.integer()`. Si no existe, se calcula como `month(fecha_alta)` |
 | `^vo$\|val.*adq\|val.*origen$` | `vo` | numeric | `as.numeric()` |
-| `vu.*asignada` | `vu_asignada` | numeric | Para Edificios: se toma tal cual (trimestres). Para otros: se divide por 4 (`02_limpiar_datos.R:91`). Si no existe: se usa `obtener_vu_asignada(rubro)` |
+| `vu.*asignada` | `vu_asignada` | numeric | Se lleva a la unidad del criterio vigente con `factor_unidad_archivo()` (Edificios viene en trimestres, el resto en años; criterio `"excel"` = sin conversión). Si no existe: se usa `obtener_vu_asignada(rubro)` |
 | `vut.*ly\|vut.*l.*y` | `vut_ly` | numeric | `as.numeric()`. Si no existe: se calcula con `calcular_vut_ly()` |
 
 **Columnas generadas (no vienen del Excel):**

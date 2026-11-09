@@ -3,7 +3,7 @@ generar_prueba_global <- function(datos_axi, anio_ejercicio = 2022) {
 
   pg_amort <- generar_pg_amortizaciones(resultado_axi, anio_ejercicio)
   pg_vr <- generar_pg_valor_residual(resultado_axi, anio_ejercicio)
-  pg_axi <- generar_pg_axi(resultado_axi)
+  pg_axi <- generar_pg_axi(resultado_axi, anio_ejercicio)
 
   datos_axi$prueba_global <- list(
     amortizaciones = pg_amort,
@@ -25,54 +25,64 @@ generar_pg_amortizaciones <- function(resultado_axi, anio_ejercicio = 2022) {
   es_existente <- function(d) {
     !es_mov_actual(d) & d$tipo_movimiento_calc != "baja"
   }
+  # amortizacion del ejercicio anterior ("Amort. Historica" del Excel LY); 0 si no se pudo leer
+  flujo_ly <- function(d) {
+    if ("amort_hist_ly" %in% names(d)) tidyr::replace_na(d$amort_hist_ly, 0) else rep(0, nrow(d))
+  }
+  # la PG del Excel del estudio trabaja con la amortizacion del EJERCICIO (flujo), no con la acumulada:
+  #   s/prueba = inicio (flujo anterior) + altas + transferencias + bajas + bienes que agotaron VU LY + irregular
+  #   s/revaluo = suma de "Amort. Historica" del ejercicio de todos los bienes que no son bajas
+  suma_por_rubro <- function(valor, filtro) {
+    vapply(rubros, function(r) {
+      d <- resultado_axi[[r]]
+      sum(valor(d)[filtro(d)], na.rm = TRUE)
+    }, numeric(1))
+  }
 
-  pg$amort_inicio <- vapply(rubros, function(r) {
-    d <- resultado_axi[[r]]
-    idx <- es_existente(d) | (es_mov_actual(d) & d$tipo_movimiento == "baja")
-    sum(d$amort_acum_ly[idx], na.rm = TRUE)
-  }, numeric(1))
+  pg$amort_inicio <- suma_por_rubro(
+    flujo_ly,
+    function(d) es_existente(d) | (es_mov_actual(d) & d$tipo_movimiento == "baja")
+  )
 
-  pg$amort_altas <- vapply(rubros, function(r) {
-    d <- resultado_axi[[r]]
-    idx <- es_mov_actual(d) & d$tipo_movimiento == "alta"
-    sum(d$amort_acum_cierre[idx], na.rm = TRUE)
-  }, numeric(1))
+  pg$amort_altas <- suma_por_rubro(
+    function(d) d$amort_hist_ejercicio,
+    function(d) es_mov_actual(d) & d$tipo_movimiento == "alta"
+  )
 
-  pg$amort_transferencias <- vapply(rubros, function(r) {
-    d <- resultado_axi[[r]]
-    idx <- es_mov_actual(d) & d$tipo_movimiento == "transferencia"
-    sum(d$amort_acum_cierre[idx], na.rm = TRUE)
-  }, numeric(1))
+  pg$amort_transferencias <- suma_por_rubro(
+    function(d) d$amort_hist_ejercicio,
+    function(d) es_mov_actual(d) & d$tipo_movimiento == "transferencia"
+  )
 
-  pg$amort_bajas <- vapply(rubros, function(r) {
-    d <- resultado_axi[[r]]
-    idx <- es_mov_actual(d) & d$tipo_movimiento == "baja"
-    -sum(d$amort_acum_ly[idx], na.rm = TRUE)
-  }, numeric(1))
+  pg$amort_bajas <- -suma_por_rubro(
+    flujo_ly,
+    function(d) es_mov_actual(d) & d$tipo_movimiento == "baja"
+  )
 
-  pg$bs_agotaron_vu_ly <- vapply(rubros, function(r) {
-    d <- resultado_axi[[r]]
-    sum(d$amort_bs_agotaron_vu_ly[es_existente(d)], na.rm = TRUE)
-  }, numeric(1))
+  # bienes cuya VU se agoto al cierre anterior: su amortizacion del ejercicio anterior no se repite
+  pg$bs_agotaron_vu_ly <- -suma_por_rubro(
+    flujo_ly,
+    function(d) es_existente(d) & d$es_vu_agotada_ly
+  )
 
-  pg$amort_hist_ejercicio_total <- vapply(rubros, function(r) {
-    d <- resultado_axi[[r]]
-    idx <- es_existente(d) & !d$es_vu_agotada_ly
-    sum(d$amort_hist_ejercicio[idx], na.rm = TRUE)
-  }, numeric(1))
+  # diferencia entre la amortizacion de este ejercicio y la del anterior en bienes que siguen amortizando
+  # (primer periodo parcial del ejercicio anterior, etc.); equivale a "Bienes con amort. irregular" del Excel
+  pg$amort_irregular <- suma_por_rubro(
+    function(d) d$amort_hist_ejercicio - flujo_ly(d),
+    function(d) es_existente(d) & !d$es_vu_agotada_ly
+  )
 
   pg$amort_prueba <- pg$amort_inicio +
     pg$amort_altas +
     pg$amort_transferencias +
     pg$amort_bajas +
     pg$bs_agotaron_vu_ly +
-    pg$amort_hist_ejercicio_total
+    pg$amort_irregular
 
-  pg$amort_revaluo <- vapply(rubros, function(r) {
-    d <- resultado_axi[[r]]
-    idx <- !(es_mov_actual(d) & d$tipo_movimiento == "baja")
-    sum(d$amort_acum_cierre[idx], na.rm = TRUE)
-  }, numeric(1))
+  pg$amort_revaluo <- suma_por_rubro(
+    function(d) d$amort_hist_ejercicio,
+    function(d) !(es_mov_actual(d) & d$tipo_movimiento == "baja")
+  )
 
   pg$diferencia <- pg$amort_prueba - pg$amort_revaluo
 
@@ -109,6 +119,8 @@ generar_pg_valor_residual <- function(resultado_axi, anio_ejercicio = 2022) {
     sum(d$vr[idx], na.rm = TRUE)
   }, numeric(1))
 
+  # como el Excel: el VR de las bajas es el valor congelado a LY (VO - amort. acumulada del LY), el mismo que
+  # figuraba en la base al inicio del ejercicio
   pg$bajas_vo <- vapply(rubros, function(r) {
     d <- resultado_axi[[r]]
     idx <- es_mov_actual(d) & d$tipo_movimiento == "baja"
@@ -138,30 +150,29 @@ generar_pg_valor_residual <- function(resultado_axi, anio_ejercicio = 2022) {
   pg
 }
 
-generar_pg_axi <- function(resultado_axi) {
+generar_pg_axi <- function(resultado_axi, anio_ejercicio = 2022) {
   rubros <- names(resultado_axi)
 
   pg <- tibble::tibble(rubro = rubros)
 
-  pg$vr_reexp <- vapply(rubros, function(r) {
-    d <- resultado_axi[[r]]
-    sum(d$vr_reexp, na.rm = TRUE)
-  }, numeric(1))
+  # Como "s/revaluo" del Excel del estudio: sin las bajas del ejercicio (salen del saldo; en el Excel se
+  # listan aparte). Incluirlas suma su AXI y desvia el total (ej. Edificios +2 M, Maquinas y Equipos +7 M).
+  sin_bajas <- function(d) {
+    !(!is.na(d$anio_movimiento) & d$anio_movimiento == anio_ejercicio & d$tipo_movimiento == "baja")
+  }
+  suma_sin_bajas <- function(columna) {
+    vapply(rubros, function(r) {
+      d <- resultado_axi[[r]]
+      sum(d[[columna]][sin_bajas(d)], na.rm = TRUE)
+    }, numeric(1))
+  }
 
-  pg$vo_reexp <- vapply(rubros, function(r) {
-    d <- resultado_axi[[r]]
-    sum(d$vo_reexp, na.rm = TRUE)
-  }, numeric(1))
-
-  pg$amort_acum_reexp <- vapply(rubros, function(r) {
-    d <- resultado_axi[[r]]
-    sum(d$amort_acum_cierre_reexp, na.rm = TRUE)
-  }, numeric(1))
-
-  pg$vr_hist <- vapply(rubros, function(r) {
-    d <- resultado_axi[[r]]
-    sum(d$vr, na.rm = TRUE)
-  }, numeric(1))
+  pg$vr_reexp <- suma_sin_bajas("vr_reexp")
+  pg$vo_reexp <- suma_sin_bajas("vo_reexp")
+  pg$amort_acum_reexp <- suma_sin_bajas("amort_acum_cierre_reexp")
+  # "Amortizacion s/revaluo" de la PG AXI del Excel (amortizacion del ejercicio reexpresada)
+  pg$amort_ejercicio_reexp <- suma_sin_bajas("amort_ejercicio_reexp")
+  pg$vr_hist <- suma_sin_bajas("vr")
 
   pg$axi_resultado <- pg$vr_reexp - pg$vr_hist
 

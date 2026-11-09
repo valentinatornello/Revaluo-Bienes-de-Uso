@@ -6,7 +6,7 @@ COLUMNAS_ESTANDAR <- c(
   "vu_restante", "rubro"
 )
 
-normalizar_hoja_categoria <- function(datos, rubro, anio_ejercicio) {
+normalizar_hoja_categoria <- function(datos, rubro, anio_ejercicio, usar_vut_cierre = FALSE) {
   if (nrow(datos) == 0) return(tibble::tibble())
 
   col_lower <- tolower(names(datos))
@@ -20,6 +20,7 @@ normalizar_hoja_categoria <- function(datos, rubro, anio_ejercicio) {
   idx_vo <- grep("^vo$|val.*adq|val.*origen$", col_lower)[1]
   idx_vu_asig <- grep("vu.*asignada", col_lower)[1]
   idx_vut_ly <- grep("vut.*ly|vut.*l.*y", col_lower)[1]
+  idx_vut_cierre <- grep("^vut$", col_lower)[1]
 
   n <- nrow(datos)
   resultado <- tibble::tibble(rubro = rep(rubro, n))
@@ -67,6 +68,10 @@ normalizar_hoja_categoria <- function(datos, rubro, anio_ejercicio) {
   }
 
   resultado$fecha_alta <- parsear_fecha_alta(fecha_raw)
+  # Sin columna "Año a tomar" (p. ej. Terrenos) el Excel usa la fecha ajustada: piso 01/01/1992.
+  if (is.na(idx_fecha_tomar)) {
+    resultado$fecha_alta <- pmax(resultado$fecha_alta, FECHA_MINIMA_REEXPRESION)
+  }
   resultado$anio_alta <- if (!is.na(idx_anio_alta)) {
     as.integer(datos[[idx_anio_alta]])
   } else {
@@ -84,19 +89,36 @@ normalizar_hoja_categoria <- function(datos, rubro, anio_ejercicio) {
     NA_real_
   }
 
-  vu_rubro <- obtener_vu_asignada(rubro)
+  # VU y VUT LY del Excel vienen en trimestres (Edificios) o anios (resto): se llevan a la unidad del criterio.
+  factor_unidad <- factor_unidad_archivo(rubro)
   resultado$vu_asignada <- if (!is.na(idx_vu_asig)) {
-    vu_archivo <- as.numeric(datos[[idx_vu_asig]])
-    if (rubro == "Edificios") vu_archivo else vu_archivo / 4
+    as.numeric(datos[[idx_vu_asig]]) * factor_unidad
   } else {
-    vu_rubro
+    obtener_vu_asignada(rubro)
   }
 
-  resultado$vut_ly <- if (!is.na(idx_vut_ly)) {
-    as.numeric(datos[[idx_vut_ly]])
-  } else {
-    NA_real_
+  # "VUT LY" del Excel es la vida util al inicio del ejercicio de ESE archivo. Si el archivo es del ejercicio
+  # anterior (no trae movimientos del ejercicio en curso), el inicio del ejercicio actual es su cierre:
+  # - hojas anuales: la columna "VUT" ya es el cierre.
+  # - hojas trimestrales (traen "Trimestres 1° Año de Alta", ej. Edificios): "VUT" es el flujo del ejercicio
+  #   (1 a 4 trimestres, filas con formula: cierre = VUT LY + VUT) o el cierre pegado a mano (mayor a 4).
+  vut_ly_archivo <- if (!is.na(idx_vut_ly)) as.numeric(datos[[idx_vut_ly]]) else NA_real_
+  if (usar_vut_cierre && !is.na(idx_vut_cierre)) {
+    vut_archivo <- as.numeric(datos[[idx_vut_cierre]])
+    hoja_trimestral <- !is.na(grep("trimestres", col_lower)[1])
+    vut_ly_archivo <- if (hoja_trimestral && !is.na(idx_vut_ly)) {
+      cierre <- dplyr::if_else(vut_archivo > 4, vut_archivo, vut_ly_archivo + vut_archivo)
+      pmin(cierre, resultado$vu_asignada / factor_unidad, na.rm = TRUE)
+    } else {
+      vut_archivo
+    }
   }
+  resultado$vut_ly <- vut_ly_archivo * factor_unidad
+
+  # Amortizacion del ejercicio anterior ("Amort. Historica" del Excel LY, ej. "Amort. Histórica" o "Amort/ Histórica"):
+  # es el "Amortizacion al inicio" de la PG en base flujo.
+  idx_amort_hist <- grep("^amort[./]? *hist.rica *$", col_lower)[1]
+  resultado$amort_hist_ly <- if (!is.na(idx_amort_hist)) as.numeric(datos[[idx_amort_hist]]) else NA_real_
 
   resultado
 }
@@ -129,11 +151,13 @@ parsear_fecha_alta <- function(fecha_raw) {
   } else if (inherits(fecha_raw, "POSIXct") || inherits(fecha_raw, "Date")) {
     as.Date(fecha_raw)
   } else {
-    tryCatch(
-      as.Date(as.numeric(as.character(fecha_raw)), origin = "1899-12-30"),
-      warning = function(w) as.Date(as.character(fecha_raw)),
-      error = function(e) as.Date(NA)
-    )
+    # Celda por celda: un texto suelto (p. ej. un encabezado repetido) no debe anular toda la columna.
+    texto <- as.character(fecha_raw)
+    numero <- suppressWarnings(as.numeric(texto))
+    fecha <- as.Date(numero, origin = "1899-12-30")
+    es_texto <- is.na(numero) & !is.na(texto)
+    fecha[es_texto] <- as.Date(texto[es_texto], optional = TRUE)
+    fecha
   }
 }
 
@@ -149,13 +173,26 @@ filtrar_ifrs16 <- function(datos) {
 limpiar_datos <- function(datos, anio_ejercicio = 2022) {
   inventario_ly <- datos$inventario_ly
 
+  # El Excel base es del ejercicio en curso si ya trae movimientos rotulados con ese anio; si no, es el del
+  # ejercicio anterior y su cierre (columna "VUT") es el inicio del ejercicio actual.
+  usar_vut_cierre <- !any(purrr::map_lgl(inventario_ly, function(raw) {
+    nrow(raw) > 0 && any(extraer_anio_movimiento(raw) == anio_ejercicio, na.rm = TRUE)
+  }))
+
   inventario_limpio <- list()
 
   for (rubro_nombre in names(inventario_ly)) {
     raw <- inventario_ly[[rubro_nombre]]
     if (is.null(raw) || nrow(raw) == 0) next
 
-    limpio <- normalizar_hoja_categoria(raw, rubro_nombre, anio_ejercicio)
+    limpio <- normalizar_hoja_categoria(raw, rubro_nombre, anio_ejercicio, usar_vut_cierre)
+    # En el Excel del estudio, debajo de la fila de totales (rotulada "Totales" o, en Terrenos, sin rotulo
+    # ni N° de activo) solo se detallan bajas de anios anteriores, altas y bajas del mismo anio y notas:
+    # no integran los totales del rubro y no deben calcularse.
+    es_fila_total <- limpio$tipo_movimiento_calc %in% "totales" |
+      (is.na(limpio$nro_activo_fijo) & is.na(limpio$anio_alta) & !is.na(limpio$vo))
+    fila_totales <- which(es_fila_total)[1]
+    if (!is.na(fila_totales)) limpio <- limpio[seq_len(fila_totales - 1L), ]
     limpio <- filtrar_ifrs16(limpio)
     limpio <- limpio %>%
       dplyr::filter(
