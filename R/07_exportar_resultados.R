@@ -60,7 +60,7 @@ exportar_excel_revaluo <- function(datos, ruta, anio_ejercicio = 2022) {
         "valor_sap_original", "direccion_movimiento", "importe_movimiento_control",
         "coef_ipc", "coef_ipim",
         "vo_reexp", "amort_hist_reexp", "amort_acum_cierre_reexp",
-        "vr_reexp", "amort_bajas", "vr_bajas"),
+        "vr_reexp", "vo_baja", "amort_acum_baja", "vr_baja", "vo_baja_reexp", "amort_bajas", "vr_bajas"),
       names(d)
     )
 
@@ -95,7 +95,7 @@ exportar_excel_revaluo <- function(datos, ruta, anio_ejercicio = 2022) {
       "vo", "amort_trimestre", "amort_hist_ejercicio", "amort_hist_2018",
       "amort_acum_cierre", "amort_acum_ly", "amort_acum_ly_reexp",
       "vr", "vo_reexp", "amort_hist_reexp", "amort_acum_cierre_reexp",
-      "vr_reexp", "amort_bajas", "vr_bajas"
+      "vr_reexp", "vo_baja", "amort_acum_baja", "vr_baja", "vo_baja_reexp", "amort_bajas", "vr_bajas"
     ))
     if (length(cols_num) > 0) {
       openxlsx::addStyle(
@@ -129,13 +129,40 @@ exportar_excel_revaluo <- function(datos, ruta, anio_ejercicio = 2022) {
       wb, sheet_name, total_style,
       rows = fila_total, cols = seq_along(cols_export)
     )
+
+    # Regla 2: las bajas de SAP que no se identifican en la base se detallan al final del rubro con su N° de activo
+    no_identificadas <- datos$bajas_no_identificadas
+    if (!is.null(no_identificadas) && nrow(no_identificadas) > 0) {
+      del_rubro <- no_identificadas[no_identificadas$rubro == rubro, c("nro_activo", "descripcion", "valor")]
+      if (nrow(del_rubro) > 0) {
+        openxlsx::writeData(
+          wb, sheet_name, "Bajas informadas en SAP que no estan en la base (no se calculan)",
+          startRow = fila_total + 2, colNames = FALSE
+        )
+        openxlsx::writeData(wb, sheet_name, del_rubro, startRow = fila_total + 3, colNames = TRUE)
+      }
+    }
   }
 
+  exportar_hoja_apartados(wb, datos)
   exportar_hoja_pg(wb, datos$prueba_global)
   exportar_hoja_indices(wb, datos)
 
   openxlsx::saveWorkbook(wb, ruta, overwrite = TRUE)
   message(sprintf("Excel exportado: %s", ruta))
+}
+
+# Hojas aparte: bajas que no se pudieron identificar (todas, tambien de rubros sin hoja) y lo que SAP trae y el
+# calculo deja apartado (IFRS 16 / leases, obras en curso, clases sin rubro), por clase.
+exportar_hoja_apartados <- function(wb, datos) {
+  if (!is.null(datos$bajas_no_identificadas) && nrow(datos$bajas_no_identificadas) > 0) {
+    openxlsx::addWorksheet(wb, "Bajas no identificadas")
+    openxlsx::writeData(wb, "Bajas no identificadas", datos$bajas_no_identificadas, colNames = TRUE)
+  }
+  if (!is.null(datos$excluidos_sap) && nrow(datos$excluidos_sap) > 0) {
+    openxlsx::addWorksheet(wb, "Excluidos SAP")
+    openxlsx::writeData(wb, "Excluidos SAP", datos$excluidos_sap, colNames = TRUE)
+  }
 }
 
 exportar_hoja_pg <- function(wb, prueba_global) {

@@ -220,12 +220,17 @@ obtener_vu_trimestres <- function(rubro) {
 # Criterio de unidad de la VU/VUT fuera de Edificios (se lee en cada llamada para poder cambiarlo
 # con options(revaluo.criterio_unidad_vu = ...)):
 #   "excel"   = replica el Excel manual del estudio: Edificios en trimestres, el resto en anios.
-#   "ricardo" = criterio de Ricardo (SPEC 4.2): todo en trimestres salvo Rodados, que sigue en anios.
-CRITERIOS_UNIDAD_VU <- c("excel", "ricardo")
-RUBROS_EN_ANIOS_CRITERIO_RICARDO <- "Rodados"
+#   "trimestres" = todo en trimestres salvo Rodados, que sigue en anios (SPEC 4.2). Es una opcion de prueba, no el
+#                  criterio validado. Antes se llamaba "ricardo": se sigue aceptando con un aviso.
+CRITERIOS_UNIDAD_VU <- c("excel", "trimestres")
+RUBROS_EN_ANIOS_CRITERIO_TRIMESTRES <- "Rodados"
 
 criterio_unidad_vu <- function() {
   criterio <- getOption("revaluo.criterio_unidad_vu", "excel")
+  if (identical(criterio, "ricardo")) {
+    warning("El criterio 'ricardo' se renombro a 'trimestres'; se usa 'trimestres'.", call. = FALSE)
+    criterio <- "trimestres"
+  }
   if (!criterio %in% CRITERIOS_UNIDAD_VU) {
     stop(sprintf(
       "criterio_unidad_vu '%s' invalido (validos: %s)", criterio, paste(CRITERIOS_UNIDAD_VU, collapse = ", ")
@@ -237,8 +242,52 @@ criterio_unidad_vu <- function() {
 # Periodos de amortizacion por anio: 4 si el rubro se devenga por trimestre, 1 si es por anio.
 obtener_periodos_por_anio <- function(rubro) {
   trimestral <- rubro == "Edificios" |
-    (criterio_unidad_vu() == "ricardo" & !rubro %in% RUBROS_EN_ANIOS_CRITERIO_RICARDO)
+    (criterio_unidad_vu() == "trimestres" & !rubro %in% RUBROS_EN_ANIOS_CRITERIO_TRIMESTRES)
   ifelse(trimestral, 4L, 1L)
+}
+
+# Amortizacion del ejercicio de baja en Edificios (LIG art. 87: "hasta el trimestre inmediato anterior a aquel en que
+# los bienes se enajenen o desafecten"). Se cambia con options(revaluo.baja_edificios = ...):
+#   "N" = trimestres anteriores al de la baja (ley, por defecto)   "S" = incluye el trimestre de la baja
+#   "A" = anio completo                                            "E" = nada (lo que hace el estudio)
+CRITERIOS_BAJA_EDIFICIOS <- c("N", "S", "A", "E")
+
+criterio_baja_edificios <- function() {
+  criterio <- getOption("revaluo.baja_edificios", "N")
+  if (!criterio %in% CRITERIOS_BAJA_EDIFICIOS) {
+    stop(sprintf(
+      "revaluo.baja_edificios '%s' invalido (validos: %s)", criterio, paste(CRITERIOS_BAJA_EDIFICIOS, collapse = ", ")
+    ), call. = FALSE)
+  }
+  criterio
+}
+
+# Bienes muebles (rubros que no son Edificios): "N" = no se amortiza el ejercicio de baja (por defecto),
+# "S" = se amortiza el anio completo. Se cambia con options(revaluo.baja_muebles_amortiza = ...).
+baja_muebles_amortiza <- function() {
+  criterio <- getOption("revaluo.baja_muebles_amortiza", "N")
+  if (!criterio %in% c("S", "N")) {
+    stop(sprintf("revaluo.baja_muebles_amortiza '%s' invalido (validos: S, N)", criterio), call. = FALSE)
+  }
+  criterio == "S"
+}
+
+# Periodos (trimestres en Edificios, anios en el resto) que devenga en el ejercicio un bien dado de baja,
+# contando desde el inicio del ejercicio. Sin fecha de baja se toma el ejercicio completo en Edificios.
+periodos_devengados_baja <- function(rubro, fecha_baja, periodos_por_anio) {
+  n <- length(fecha_baja)
+  if (identical(rubro, "Edificios")) {
+    trim_baja <- floor((lubridate::month(fecha_baja) - 1L) / 3L) + 1L
+    periodos <- switch(
+      criterio_baja_edificios(),
+      N = trim_baja - 1L,
+      S = trim_baja,
+      A = rep.int(4L, n),
+      E = rep.int(0L, n)
+    )
+    return(as.integer(dplyr::coalesce(as.integer(periodos), 4L)))
+  }
+  rep.int(if (baja_muebles_amortiza()) as.integer(periodos_por_anio) else 0L, n)
 }
 
 # Los Excel del estudio guardan VU y VUT LY de Edificios en trimestres y los de los demas rubros

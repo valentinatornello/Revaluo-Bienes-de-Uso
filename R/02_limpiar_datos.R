@@ -90,11 +90,19 @@ normalizar_hoja_categoria <- function(datos, rubro, anio_ejercicio, usar_vut_cie
   }
 
   # VU y VUT LY del Excel vienen en trimestres (Edificios) o anios (resto): se llevan a la unidad del criterio.
+  # Si la VU de la fila esta vacia se usa la vida util del rubro (en la unidad del criterio).
   factor_unidad <- factor_unidad_archivo(rubro)
-  resultado$vu_asignada <- if (!is.na(idx_vu_asig)) {
-    as.numeric(datos[[idx_vu_asig]]) * factor_unidad
+  vu_rubro <- obtener_vu_asignada(rubro)
+  vu_archivo <- if (!is.na(idx_vu_asig)) as.numeric(datos[[idx_vu_asig]]) * factor_unidad else rep(NA_real_, n)
+  resultado$vu_del_rubro <- is.na(vu_archivo) & !is.na(vu_rubro) & !is.na(resultado$vo) &
+    !is.na(resultado$nro_activo_fijo) & !is.na(idx_vu_asig)
+  resultado$vu_asignada <- dplyr::if_else(is.na(vu_archivo), vu_rubro, vu_archivo)
+
+  # Fecha real del bien (para contar la vida util de los anteriores a 1992); fecha_alta lleva el piso de 1992.
+  resultado$fecha_alta_real <- if (!is.na(idx_fecha_archivo)) {
+    rep_len(parsear_fecha_alta(datos[[idx_fecha_archivo]]), n)
   } else {
-    obtener_vu_asignada(rubro)
+    resultado$fecha_alta
   }
 
   # "VUT LY" del Excel es la vida util al inicio del ejercicio de ESE archivo. Si el archivo es del ejercicio
@@ -119,6 +127,10 @@ normalizar_hoja_categoria <- function(datos, rubro, anio_ejercicio, usar_vut_cie
   # es el "Amortizacion al inicio" de la PG en base flujo.
   idx_amort_hist <- grep("^amort[./]? *hist.rica *$", col_lower)[1]
   resultado$amort_hist_ly <- if (!is.na(idx_amort_hist)) as.numeric(datos[[idx_amort_hist]]) else NA_real_
+
+  # "Amort. Acum" del Excel LY: amortizacion acumulada al cierre de ese archivo; sirve para controlar el saldo inicial.
+  idx_amort_acum <- grep("^amort[./]? *acum\\.? *$", col_lower)[1]
+  resultado$amort_acum_archivo <- if (!is.na(idx_amort_acum)) as.numeric(datos[[idx_amort_acum]]) else NA_real_
 
   resultado
 }
@@ -180,7 +192,7 @@ limpiar_datos <- function(datos, anio_ejercicio = 2022) {
   }))
 
   inventario_limpio <- list()
-
+  control_saldo_inicial <- list()
   for (rubro_nombre in names(inventario_ly)) {
     raw <- inventario_ly[[rubro_nombre]]
     if (is.null(raw) || nrow(raw) == 0) next
@@ -192,6 +204,15 @@ limpiar_datos <- function(datos, anio_ejercicio = 2022) {
     es_fila_total <- limpio$tipo_movimiento_calc %in% "totales" |
       (is.na(limpio$nro_activo_fijo) & is.na(limpio$anio_alta) & !is.na(limpio$vo))
     fila_totales <- which(es_fila_total)[1]
+    # Saldo inicial: lo que suman las filas de detalle (antes de sacar IFRS 16) contra la fila "Totales" del archivo.
+    filas_detalle <- if (!is.na(fila_totales)) limpio[seq_len(fila_totales - 1L), ] else limpio
+    control_saldo_inicial[[rubro_nombre]] <- tibble::tibble(
+      rubro = rubro_nombre,
+      vo_filas = sum(filas_detalle$vo, na.rm = TRUE),
+      vo_totales = if (!is.na(fila_totales)) limpio$vo[fila_totales] else NA_real_,
+      amort_acum_filas = if (all(is.na(filas_detalle$amort_acum_archivo))) NA_real_ else sum(filas_detalle$amort_acum_archivo, na.rm = TRUE),
+      amort_acum_totales = if (!is.na(fila_totales)) limpio$amort_acum_archivo[fila_totales] else NA_real_
+    )
     if (!is.na(fila_totales)) limpio <- limpio[seq_len(fila_totales - 1L), ]
     limpio <- filtrar_ifrs16(limpio)
     limpio <- limpio %>%
@@ -204,5 +225,6 @@ limpiar_datos <- function(datos, anio_ejercicio = 2022) {
   }
 
   datos$inventario_ly <- inventario_limpio
+  datos$control_saldo_inicial <- dplyr::bind_rows(control_saldo_inicial)
   datos
 }

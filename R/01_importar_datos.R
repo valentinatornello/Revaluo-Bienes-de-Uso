@@ -151,7 +151,46 @@ leer_indices_ipc <- function(path_excel) {
       ipc_actual = as.numeric(ipc_actual),
       coeficiente = as.numeric(coeficiente)
     ) %>%
-    dplyr::filter(!is.na(fecha))
+    dplyr::filter(!is.na(fecha)) %>%
+    recalcular_coeficiente_ipc()
+}
+
+# coeficiente = indice de cierre / indice del mes de alta, con todos los decimales (no el valor pegado en el Excel)
+recalcular_coeficiente_ipc <- function(indices_ipc) {
+  indices_ipc %>%
+    dplyr::mutate(coeficiente = dplyr::if_else(
+      !is.na(ipc_periodo) & !is.na(ipc_actual) & ipc_periodo > 0, ipc_actual / ipc_periodo, coeficiente
+    ))
+}
+
+# Tabla propia de indices IPC (INDEC, nivel general nacional, 4 decimales): CSV con columnas "fecha" (cualquier dia
+# del mes) e "indice". Si existe, reemplaza el indice de cada mes (y el de cierre si trae el ultimo mes de la tabla).
+leer_indices_ipc_propios <- function(path_parametros) {
+  path_csv <- file.path(path_parametros, "indices_ipc_indec.csv")
+  if (!file.exists(path_csv)) return(NULL)
+  readr::read_csv(path_csv, show_col_types = FALSE) %>%
+    dplyr::transmute(mes = lubridate::floor_date(as.Date(fecha), "month"), indice = as.numeric(indice)) %>%
+    dplyr::filter(!is.na(mes), !is.na(indice))
+}
+
+aplicar_indices_ipc_propios <- function(indices_ipc, indices_propios) {
+  if (is.null(indices_propios) || nrow(indices_propios) == 0) return(indices_ipc)
+  mes <- lubridate::floor_date(indices_ipc$fecha, "month")
+  nuevo <- indices_propios$indice[match(mes, indices_propios$mes)]
+  mes_cierre <- lubridate::floor_date(max(indices_ipc$fecha, na.rm = TRUE), "month")
+  indice_cierre <- indices_propios$indice[match(mes_cierre, indices_propios$mes)]
+  indices_ipc$ipc_periodo <- dplyr::coalesce(nuevo, indices_ipc$ipc_periodo)
+  if (!is.na(indice_cierre)) indices_ipc$ipc_actual <- indice_cierre
+  recalcular_coeficiente_ipc(indices_ipc)
+}
+
+# Meses cuyo indice tiene 2 decimales o menos: el INDEC publica 4, asi que probablemente esta redondeado
+meses_con_indice_redondeado <- function(indices_ipc) {
+  meses <- indices_ipc %>%
+    dplyr::mutate(mes = lubridate::floor_date(fecha, "month")) %>%
+    dplyr::distinct(mes, ipc_periodo) %>%
+    dplyr::filter(!is.na(ipc_periodo))
+  meses$mes[abs(meses$ipc_periodo * 100 - round(meses$ipc_periodo * 100)) < 1e-6]
 }
 
 leer_indices_ipim_bajas <- function(path_excel) {
@@ -179,7 +218,8 @@ leer_indices_ipc_bajas <- function(path_excel) {
       ipc_actual = as.numeric(ipc_actual),
       coeficiente = as.numeric(coeficiente)
     ) %>%
-    dplyr::filter(!is.na(fecha))
+    dplyr::filter(!is.na(fecha)) %>%
+    recalcular_coeficiente_ipc()
 }
 
 leer_inventario_categorias <- function(path_excel) {
@@ -305,12 +345,52 @@ buscar_archivo_real <- function(anio_ejercicio, dir_parametros = file.path("inpu
   archivos[1]
 }
 
+MOTIVO_EXCLUSION_IFRS16 <- "IFRS 16 (activos AS*)"
+MOTIVO_EXCLUSION_OBRAS <- "Obras en curso"
+MOTIVO_EXCLUSION_NO_UTILIZADO <- "Codigo no utilizado (leases e intangibles)"
+MOTIVO_EXCLUSION_SIN_RUBRO <- "Clase sin rubro en la tabla"
+
+# Clases que el glosario de reglas ("Codigos no utilizados") deja fuera de Bienes de Uso: leases e intangibles
+CODIGOS_NO_UTILIZADOS <- c("9050", "9150", "9250", "9350", "9750", "495LA", "430LA")
+
+# Motivo por el que una fila de detalle de SAP no entra al calculo (NA si entra)
+motivo_exclusion_sap <- function(nro_activo, rubro, clase = NA_character_) {
+  dplyr::case_when(
+    grepl("^AS", nro_activo, ignore.case = TRUE) ~ MOTIVO_EXCLUSION_IFRS16,
+    is.na(rubro) & as.character(clase) %in% CODIGOS_NO_UTILIZADOS ~ MOTIVO_EXCLUSION_NO_UTILIZADO,
+    is.na(rubro) ~ MOTIVO_EXCLUSION_SIN_RUBRO,
+    rubro == "Obras en curso" ~ MOTIVO_EXCLUSION_OBRAS,
+    TRUE ~ NA_character_
+  )
+}
+
+filtrar_movimientos_sap <- function(mov) {
+  mov %>%
+    dplyr::filter(
+      es_fila_detalle_sap(nro_activo),
+      is.na(motivo_exclusion_sap(nro_activo, rubro, class))
+    )
+}
+
+# Lo que SAP trae y el calculo deja afuera, por tipo de movimiento, clase y motivo, con cantidad e importe
+resumir_excluidos_sap <- function(movimientos) {
+  purrr::imap_dfr(movimientos, function(mov, tipo) {
+    mov <- mov[es_fila_detalle_sap(mov$nro_activo), ]
+    mov$motivo <- motivo_exclusion_sap(mov$nro_activo, mov$rubro, mov$class)
+    mov <- mov[!is.na(mov$motivo), ]
+    if (nrow(mov) == 0) return(tibble::tibble())
+    mov %>%
+      dplyr::group_by(tipo_movimiento_sap = tipo, clase = as.character(class), motivo) %>%
+      dplyr::summarise(filas = dplyr::n(), importe = sum(valor, na.rm = TRUE), .groups = "drop")
+  })
+}
+
 leer_movimientos_sap <- function(path_sap, anio_ejercicio = NULL) {
   altas_excel <- readxl::read_excel(path_sap, sheet = "Altas")
   bajas_excel <- readxl::read_excel(path_sap, sheet = "Bajas")
   transf_excel <- readxl::read_excel(path_sap, sheet = "Transferencias")
 
-  altas_raw <- altas_excel %>%
+  altas_todas <- altas_excel %>%
     janitor::clean_names() %>%
     dplyr::rename(
       nro_activo = asset,
@@ -327,15 +407,11 @@ leer_movimientos_sap <- function(path_sap, anio_ejercicio = NULL) {
       cap_date_parsed = parsear_fecha_ddmmyyyy(cap_date),
       valor = as.numeric(valor),
       rubro = dplyr::recode(class, !!!CLASS_A_RUBRO, .default = NA_character_)
-    ) %>%
-    dplyr::filter(
-      es_fila_detalle_sap(nro_activo),
-      !is.na(rubro),
-      rubro != "Obras en curso",
-      !grepl("^AS", nro_activo, ignore.case = TRUE)
     )
 
-  bajas_raw <- bajas_excel %>%
+  altas_raw <- filtrar_movimientos_sap(altas_todas)
+
+  bajas_todas <- bajas_excel %>%
     janitor::clean_names() %>%
     dplyr::rename(
       nro_activo = asset,
@@ -354,15 +430,11 @@ leer_movimientos_sap <- function(path_sap, anio_ejercicio = NULL) {
       depr_retired = as.numeric(depr_retired),
       ret_book_value = as.numeric(ret_book_value),
       rubro = dplyr::recode(class, !!!CLASS_A_RUBRO, .default = NA_character_)
-    ) %>%
-    dplyr::filter(
-      es_fila_detalle_sap(nro_activo),
-      !is.na(rubro),
-      rubro != "Obras en curso",
-      !grepl("^AS", nro_activo, ignore.case = TRUE)
     )
 
-  transf_raw <- transf_excel %>%
+  bajas_raw <- filtrar_movimientos_sap(bajas_todas)
+
+  transf_todas <- transf_excel %>%
     janitor::clean_names() %>%
     dplyr::rename(
       nro_activo = asset,
@@ -380,14 +452,17 @@ leer_movimientos_sap <- function(path_sap, anio_ejercicio = NULL) {
       valor = as.numeric(valor),
       transf_dep = as.numeric(suma_de_trans_o_dep),
       rubro = dplyr::recode(class, !!!CLASS_A_RUBRO, .default = NA_character_)
-    ) %>%
-    dplyr::filter(
-      es_fila_detalle_sap(nro_activo),
-      !is.na(rubro),
-      rubro != "Obras en curso",
-      !grepl("^AS", nro_activo, ignore.case = TRUE)
     )
 
+  transf_raw <- filtrar_movimientos_sap(transf_todas)
+
+  excluidos <- resumir_excluidos_sap(list(alta = altas_todas, baja = bajas_todas, transferencia = transf_todas))
+  # Las transferencias deben netear en cero contando las puntas de las clases excluidas
+  control_transferencias <- tibble::tibble(
+    neto_todas = sum(transf_todas$valor[es_fila_detalle_sap(transf_todas$nro_activo)], na.rm = TRUE),
+    neto_incluidas = sum(transf_raw$valor, na.rm = TRUE),
+    neto_excluidas = neto_todas - neto_incluidas
+  )
   # filas_detalle cuenta las filas de detalle del archivo SAP antes de filtrar por rubro (el conteo esperado
   # es el del archivo); filas_importadas son las que quedan tras excluir rubros fuera de tabla, obras en curso e IFRS 16.
   contar_detalle <- function(hoja) {
@@ -413,7 +488,9 @@ leer_movimientos_sap <- function(path_sap, anio_ejercicio = NULL) {
     altas = altas_raw,
     bajas = bajas_raw,
     transferencias = transf_raw,
-    auditoria_movimientos = auditoria_movimientos
+    auditoria_movimientos = auditoria_movimientos,
+    excluidos = excluidos,
+    control_transferencias = control_transferencias
   )
 }
 
@@ -479,6 +556,11 @@ importar_datos <- function(path_excel_ly, inputs_dir = "inputs", anio_ejercicio 
     indices_ipc_bajas <- leer_indices_ipc_bajas(path_excel_ly)
   }
   if (!is.null(anio_ejercicio)) validar_cobertura_ipc(indices_ipc, anio_ejercicio)
+  indices_ipc_propios <- leer_indices_ipc_propios(rutas$parametros)
+  meses_ipc_redondeados <- meses_con_indice_redondeado(indices_ipc)
+  indices_ipc <- aplicar_indices_ipc_propios(indices_ipc, indices_ipc_propios)
+  indices_ipc_bajas <- aplicar_indices_ipc_propios(indices_ipc_bajas, indices_ipc_propios)
+  meses_ipc_redondeados <- meses_ipc_redondeados[!meses_ipc_redondeados %in% indices_ipc_propios$mes]
   excepciones_fecha_base <- leer_excepciones_fecha_base(rutas$parametros)
 
   archivo_sap <- elegir_archivo_sap(rutas$sap, anio_ejercicio, path_sap)
@@ -490,7 +572,9 @@ importar_datos <- function(path_excel_ly, inputs_dir = "inputs", anio_ejercicio 
       altas = tibble::tibble(),
       bajas = tibble::tibble(),
       transferencias = tibble::tibble(),
-      auditoria_movimientos = tibble::tibble()
+      auditoria_movimientos = tibble::tibble(),
+      excluidos = tibble::tibble(),
+      control_transferencias = tibble::tibble()
     )
   }
 
@@ -500,11 +584,14 @@ importar_datos <- function(path_excel_ly, inputs_dir = "inputs", anio_ejercicio 
     indices_ipim       = indices_ipim,
     indices_ipc_bajas  = indices_ipc_bajas,
     indices_ipim_bajas = indices_ipim_bajas,
+    meses_ipc_redondeados = meses_ipc_redondeados,
     excepciones_fecha_base = excepciones_fecha_base,
     archivo_sap        = if (is.na(archivo_sap)) NA_character_ else basename(archivo_sap),
     altas              = movimientos$altas,
     bajas              = movimientos$bajas,
     transferencias     = movimientos$transferencias,
-    auditoria_movimientos = movimientos$auditoria_movimientos
+    auditoria_movimientos = movimientos$auditoria_movimientos,
+    excluidos_sap      = movimientos$excluidos,
+    control_transferencias = movimientos$control_transferencias
   )
 }

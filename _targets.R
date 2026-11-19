@@ -3,7 +3,8 @@ tar_option_set(packages = c("tidyverse", "readxl", "openxlsx", "janitor", "lubri
 
 tar_source()
 
-# "excel" replica el Excel manual (anios fuera de Edificios); "ricardo" lleva el resto a trimestres salvo Rodados.
+# "excel" replica el Excel manual (anios fuera de Edificios); "trimestres" (antes "ricardo") lleva el resto a trimestres salvo Rodados.
+# Ejercicio de baja: options(revaluo.baja_edificios = "N"/"S"/"A"/"E") y options(revaluo.baja_muebles_amortiza = "S"/"N").
 # Al cambiarlo hay que invalidar el pipeline (targets::tar_invalidate(everything())).
 options(revaluo.criterio_unidad_vu = Sys.getenv("CRITERIO_UNIDAD_VU", unset = "excel"))
 

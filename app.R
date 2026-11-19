@@ -49,6 +49,7 @@ ejecutar_validaciones <- function(datos_pg, pg_real = NULL) {
   pipeline_env$ejecutar_validaciones(datos_pg, pg_real)
 }
 
+
 leer_pg_real <- function(path_excel) {
   pipeline_env$leer_pg_real(path_excel)
 }
@@ -137,7 +138,7 @@ calcular_automatizacion <- function(validacion, pg_real = NULL) {
     
     # Revisamos que la validación mencione concordancia con KPMG
     validacion_externa <- resumen %>%
-      filter(grepl("kpmg|precio|externo", tipo, ignore.case = TRUE)) %>%
+      filter(grepl("comparacion_real|kpmg|precio|externo", tipo, ignore.case = TRUE)) %>%
       pull(resultado)
     
     if (length(validacion_externa) > 0) {

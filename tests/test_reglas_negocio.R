@@ -7,6 +7,8 @@ source("R/03_construir_rollforward.R")
 source("R/04_calculo_axi.R")
 source("R/05_prueba_global.R")
 source("R/06_validaciones.R")
+source("R/07_exportar_resultados.R")
+source("R/08_comparar_excel_manual.R")
 
 stopifnot(obtener_vu_asignada("Edificios") == 200)
 stopifnot(obtener_vu_asignada("Rodados") == 5)
@@ -71,10 +73,44 @@ resultado_rodados_baja <- calcular_rubro_amortizable(
   activo_baja[2, ], "Rodados", indices_prueba, indices_prueba,
   indices_prueba, indices_prueba, 2023
 )
-stopifnot(resultado_edificios_baja$vut_ejercicio == 2)
-stopifnot(resultado_edificios_baja$amort_hist_ejercicio == 1)
-stopifnot(resultado_rodados_baja$vut_ejercicio == 1)
-stopifnot(resultado_rodados_baja$amort_hist_ejercicio == 20)
+stopifnot(resultado_edificios_baja$vut_ejercicio == 1)
+stopifnot(resultado_edificios_baja$amort_hist_ejercicio == 0.5)
+stopifnot(resultado_rodados_baja$vut_ejercicio == 0)
+stopifnot(resultado_rodados_baja$amort_hist_ejercicio == 0)
+# La baja no tiene saldo al cierre: lo que se retira queda en columnas propias
+stopifnot(resultado_rodados_baja$vo_cierre == 0, resultado_rodados_baja$vr == 0, resultado_rodados_baja$vr_reexp == 0)
+stopifnot(resultado_rodados_baja$vo_baja == 100, resultado_rodados_baja$vr_baja == resultado_rodados_baja$vo_baja - resultado_rodados_baja$amort_acum_baja)
+
+# Edificios, ejercicio de baja con los cuatro valores del parametro (baja en abril = trimestre 2)
+for (par in list(c("N", 1), c("S", 2), c("A", 4), c("E", 0))) {
+  options(revaluo.baja_edificios = par[1])
+  r <- calcular_rubro_amortizable(
+    activo_baja[1, ], "Edificios", indices_prueba, indices_prueba, indices_prueba, indices_prueba, 2023
+  )
+  stopifnot(r$vut_ejercicio == as.numeric(par[2]))
+}
+options(revaluo.baja_edificios = NULL)
+# Muebles: con revaluo.baja_muebles_amortiza = "S" se amortiza el anio completo
+options(revaluo.baja_muebles_amortiza = "S")
+r <- calcular_rubro_amortizable(
+  activo_baja[2, ], "Rodados", indices_prueba, indices_prueba, indices_prueba, indices_prueba, 2023
+)
+stopifnot(r$vut_ejercicio == 1, r$amort_hist_ejercicio == 20)
+options(revaluo.baja_muebles_amortiza = NULL)
+
+# Baja en el mismo ejercicio de un Edificio dado de alta en el trimestre 3 (mes 7): descuenta los 2 trimestres previos
+# al alta. Baja en octubre (trimestre 4): 3 anteriores - 2 previos = 1; baja en agosto (trimestre 3): 2 - 2 = 0.
+alta_y_baja <- activo_prueba[1, ] %>%
+  dplyr::mutate(fecha_alta = as.Date("2023-07-01"), mes_alta = 7L, tipo_movimiento_calc = "baja")
+r_oct <- calcular_rubro_amortizable(
+  dplyr::mutate(alta_y_baja, fecha_baja = as.Date("2023-10-15")), "Edificios",
+  indices_prueba, indices_prueba, indices_prueba, indices_prueba, 2023
+)
+r_ago <- calcular_rubro_amortizable(
+  dplyr::mutate(alta_y_baja, fecha_baja = as.Date("2023-08-15")), "Edificios",
+  indices_prueba, indices_prueba, indices_prueba, indices_prueba, 2023
+)
+stopifnot(r_oct$vut_ejercicio == 1, r_ago$vut_ejercicio == 0)
 
 movimiento_rodados <- tibble::tibble(
   nro_activo = "R-SAP",
@@ -226,8 +262,8 @@ stopifnot(limpio_terrenos$fecha_alta == as.Date("1992-01-01"), limpio_terrenos$a
 fechas <- parsear_fecha_alta(c("43831", "A\u00f1o a tomar", NA))
 stopifnot(fechas[1] == as.Date("2020-01-01"), is.na(fechas[2]), is.na(fechas[3]))
 
-# criterio "ricardo": trimestres para todos los rubros salvo Rodados (anios).
-options(revaluo.criterio_unidad_vu = "ricardo")
+# criterio "trimestres" (antes "ricardo"): trimestres para todos los rubros salvo Rodados (anios).
+options(revaluo.criterio_unidad_vu = "trimestres")
 stopifnot(obtener_periodos_por_anio("MyU") == 4, obtener_periodos_por_anio("Rodados") == 1)
 stopifnot(obtener_vu_asignada("MyU") == 12, obtener_vu_asignada("Rodados") == 5)
 stopifnot(factor_unidad_archivo("MyU") == 4, factor_unidad_archivo("Rodados") == 1)
@@ -263,7 +299,7 @@ resultado_baja_trimestral <- calcular_rubro_amortizable(
   baja_trimestral, "MyU", indices_prueba, indices_prueba,
   indices_prueba, indices_prueba, 2023
 )
-stopifnot(resultado_baja_trimestral$vut_ejercicio == 2)
+stopifnot(resultado_baja_trimestral$vut_ejercicio == 0)
 
 options(revaluo.criterio_unidad_vu = NULL)
 
@@ -379,5 +415,120 @@ limpio_anual <- limpiar_datos(list(inventario_ly = list(MyU = hoja_anual)), 2023
 stopifnot(limpio_anual$vut_ly == c(1, 5))
 limpio_mismo_anio <- limpiar_datos(list(inventario_ly = list(MyU = hoja_anual)), 2022)$inventario_ly$MyU
 stopifnot(limpio_mismo_anio$vut_ly == c(0, 4))
+
+# --- Cambios del doc de Ricardo (docs/18) ---
+
+# 4 y 5: coeficiente de las bajas. Anterior a 2018 = 1 (criterio unitario); alta en el ejercicio = 1; resto = IPC de bajas.
+tabla_bajas <- tibble::tibble(fecha = as.Date(c("2018-01-01", "2023-01-01")), coeficiente = c(5, 2))
+inv_bajas <- tibble::tibble(
+  tipo_movimiento_calc = "baja", anio_alta = c(2010L, 2023L, 2019L),
+  fecha_indice_reexp = as.Date(c("2010-05-01", "2023-01-15", "2023-01-15"))
+)
+coef_bajas <- calcular_coeficientes_bajas(inv_bajas, tabla_bajas, tabla_bajas, 2023L)
+stopifnot(coef_bajas$ipim[1] == 1, coef_bajas$ipc[2] == 1, coef_bajas$ipc[3] == 2)
+
+# 8: VU Asignada vacia en el historico = vida util del rubro (MyU: 3 anios)
+hoja_vu_vacia <- tibble::tibble(tipo = c("Altas 2020", NA), nro = c("1", "2"), vo = c("100", "100"),
+                                vu = c(NA, "5"), vut_ly = c("1", "1"))
+names(hoja_vu_vacia) <- c("tipo", "N\u00b0 Activo Fijo", "VO", "VU Asignada", "VUT LY")
+limpio_vu <- limpiar_datos(list(inventario_ly = list(MyU = hoja_vu_vacia)), 2022)$inventario_ly$MyU
+stopifnot(limpio_vu$vu_asignada == c(3, 5), limpio_vu$vu_del_rubro == c(TRUE, FALSE))
+
+# 9 y 10: amortizacion acumulada inicial con tope en la VU; periodos del ejercicio con piso en cero
+activo_vut_mayor <- tibble::tibble(
+  rubro = "Eq de Oficina", nro_activo_fijo = "X2", fecha_alta = as.Date("2015-01-01"), anio_alta = 2015L, mes_alta = 1L,
+  vo = 300, vu_asignada = 3, vut_ly = 5, tipo_movimiento_calc = "historico"
+)
+r_tope <- calcular_rubro_amortizable(
+  activo_vut_mayor, "Eq de Oficina", indices_prueba, indices_prueba, indices_prueba, indices_prueba, 2023
+)
+stopifnot(r_tope$amort_acum_ly == 300, r_tope$vut_ejercicio == 0, r_tope$vut_cierre == 3, r_tope$amort_hist_ejercicio == 0)
+
+# 11: VUT calculada desde la fecha real (anterior a 1992), no desde el piso que se usa para el indice
+activo_antiguo <- tibble::tibble(
+  rubro = "Edificios", nro_activo_fijo = "E9", fecha_alta = as.Date("1992-01-01"), anio_alta = 1992L, mes_alta = 1L,
+  fecha_alta_real = as.Date("1985-01-01"), vo = 200, vu_asignada = 200, vut_ly = NA_real_,
+  tipo_movimiento_calc = "historico"
+)
+r_antiguo <- calcular_rubro_amortizable(
+  activo_antiguo, "Edificios", indices_prueba, indices_prueba, indices_prueba, indices_prueba, 2023
+)
+stopifnot(r_antiguo$vut_ly == (2023 - 1985 - 1) * 4 + 4)
+
+# 17: el criterio "ricardo" se renombro a "trimestres" y sigue funcionando con un aviso
+options(revaluo.criterio_unidad_vu = "ricardo")
+aviso_ricardo <- tryCatch({ criterio_unidad_vu(); FALSE }, warning = function(w) TRUE)
+stopifnot(aviso_ricardo)
+options(revaluo.criterio_unidad_vu = NULL)
+
+# 12: lo excluido de SAP se informa por clase con cantidad e importe
+sap_prueba <- tibble::tibble(
+  nro_activo = c("1", "AS9", "3", "4", "5"), class = c("320LA", "320LA", "600LA", "999XX", "495LA"),
+  rubro = c("Eq de Oficina", "Eq de Oficina", "Obras en curso", NA, NA), valor = c(10, 20, 30, 40, 50)
+)
+excl <- resumir_excluidos_sap(list(alta = sap_prueba))
+stopifnot(nrow(excl) == 4, sum(excl$importe) == 140, nrow(filtrar_movimientos_sap(sap_prueba)) == 1)
+res_excl <- validar_clases_excluidas(excl)
+# una clase nueva sin rubro avisa; las "no utilizadas" del glosario (495LA) son exclusiones conocidas
+stopifnot(res_excl$resultado[excl$clase == "999XX"] == "ADVERTENCIA", res_excl$resultado[excl$clase == "495LA"] == "OK")
+
+# la exportacion detalla las bajas no identificadas al final del rubro y en una hoja aparte
+bajas_no_id_prueba <- tibble::tibble(rubro = "MyU", nro_activo = c("B1", "B2"), descripcion = "x", valor = c(5, 6))
+datos_export <- list(
+  resultado_axi = list(MyU = tibble::tibble(nro_activo_fijo = c("A1", "A2"), vo = c(10, 20))),
+  bajas_no_identificadas = bajas_no_id_prueba, excluidos_sap = excl,
+  prueba_global = list(amortizaciones = tibble::tibble(rubro = "MyU"), valor_residual = tibble::tibble(rubro = "MyU"),
+                       axi = tibble::tibble(rubro = "MyU"))
+)
+ruta_export <- tempfile(fileext = ".xlsx")
+exportar_excel_revaluo(datos_export, ruta_export, 2023)
+hoja_myu <- suppressMessages(readxl::read_excel(ruta_export, sheet = "MyU", col_names = FALSE))
+stopifnot(all(c("B1", "B2") %in% unlist(hoja_myu)))
+stopifnot(all(c("Bajas no identificadas", "Excluidos SAP") %in% readxl::excel_sheets(ruta_export)))
+
+# 13: las transferencias deben netear en cero contando las clases excluidas
+stopifnot(validar_control_transferencias(tibble::tibble(neto_todas = 0, neto_incluidas = 5, neto_excluidas = -5))$resultado == "OK")
+stopifnot(validar_control_transferencias(tibble::tibble(neto_todas = 500, neto_incluidas = 500, neto_excluidas = 0))$resultado == "ERROR")
+
+# 14: el saldo inicial tiene que ser el cierre anterior por rubro
+ctrl_saldo <- tibble::tibble(rubro = "MyU", vo_filas = 100, vo_totales = 100, amort_acum_filas = 50, amort_acum_totales = 50)
+axi_saldo <- list(MyU = tibble::tibble(amort_acum_ly = 50, amort_acum_archivo = 50))
+stopifnot(validar_saldo_inicial(ctrl_saldo, axi_saldo)$resultado == "OK")
+ctrl_saldo$vo_totales <- 1000
+stopifnot(validar_saldo_inicial(ctrl_saldo, axi_saldo)$resultado == "ERROR")
+
+# 7: indices IPC con todos los decimales y tabla propia del INDEC
+ipc_prueba <- tibble::tibble(
+  fecha = as.Date(c("2021-01-15", "2021-02-10", "2021-12-31")), ipc_periodo = c(400, 404.1234, 800),
+  ipc_actual = 800, coeficiente = c(2.0001, 1.9, 1)
+)
+stopifnot(abs(recalcular_coeficiente_ipc(ipc_prueba)$coeficiente[2] - 800 / 404.1234) < 1e-12)
+stopifnot(meses_con_indice_redondeado(ipc_prueba) == as.Date(c("2021-01-01", "2021-12-01")))
+propios <- tibble::tibble(mes = as.Date("2021-01-01"), indice = 400.1234)
+ipc_propio <- aplicar_indices_ipc_propios(ipc_prueba, propios)
+stopifnot(ipc_propio$ipc_periodo[1] == 400.1234, abs(ipc_propio$coeficiente[1] - 800 / 400.1234) < 1e-12)
+
+# Comparador contra el Excel del estudio: arma un Excel chico con la hoja de MyU (encabezado en la fila 12)
+excel_prueba <- tempfile(fileext = ".xlsx")
+wb_prueba <- openxlsx::createWorkbook()
+openxlsx::addWorksheet(wb_prueba, "MyU")
+filas_excel <- rbind(
+  matrix("", 11, 6),
+  c("", "N\u00b0 Activo Fijo", "A\u00f1o alta", "VO", "VU Asignada", "VUT"),
+  c("Altas 2020", "A1", "2020", "300", "3", "3"),
+  c("", "A2", "2020", "600", "3", "3"),
+  c("Totales", "", "", "900", "", "")
+)
+openxlsx::writeData(wb_prueba, "MyU", filas_excel, colNames = FALSE)
+openxlsx::saveWorkbook(wb_prueba, excel_prueba, overwrite = TRUE)
+motor_prueba <- list(MyU = tibble::tibble(
+  nro_activo_fijo = c("A1", "A2"), tipo_movimiento_calc = "historico",
+  vo = c(300, 600), vu_asignada = c(3, 3), vut_cierre = c(3, 2)
+))
+cmp_prueba <- comparar_filas_con_excel(motor_prueba, excel_prueba)
+stopifnot(cmp_prueba$filas$solo_motor == 0, cmp_prueba$filas$solo_excel == 0)
+stopifnot(cmp_prueba$resumen$coinciden[cmp_prueba$resumen$campo == "vo"] == 2)
+stopifnot(cmp_prueba$resumen$coinciden[cmp_prueba$resumen$campo == "vut_cierre"] == 1)
+stopifnot(cmp_prueba$diferencias$nro_activo_fijo == "A2", cmp_prueba$diferencias$dif == -1)
 
 cat("OK\n")

@@ -205,8 +205,8 @@
 | Fórmula explicada | Si es alta del año: se computan los trimestres del primer año (Edificios) o 1 año (otros). Si no es alta del año: se computan 4 trimestres (Edificios) o 1 año (otros), o menos si es baja de Edificio (trimestres hasta la fecha de baja). Se limita por la VU restante: `vu_asignada - vut_ly` |
 | Unidad | Trimestres (Edificios) / Años (otros) |
 | Redondeo | No explícito |
-| Casos borde | **VU agotada:** si `vut_ly >= vu_asignada`, entonces `VU - VUT_LY ≤ 0` y `VUT_EJ = 0`. **Baja de Edificio:** `periodos_hasta_baja = floor((mes_baja - 1) / 3) + 1` = trimestre de la baja (`04_calculo_axi.R:68-69`). **Bajas de no-Edificios:** `periodos_hasta_baja = 1` (año completo, sin prorrateo por mes de baja) |
-| Norma | Ley de Ganancias: bienes muebles → año de baja = **sin amortización** (VUT_EJ debería ser 0 para bajas de muebles). Edificios: se amortiza hasta el trimestre de baja. **El R NO implementa correctamente la baja de muebles** — les computa 1 año |
+| Casos borde | **VU agotada:** si `vut_ly >= vu_asignada`, entonces `VU - VUT_LY ≤ 0` y `VUT_EJ = 0` (con piso en cero). **Baja de Edificio:** `periodos_devengados_baja()` (`utils.R`): por defecto los trimestres anteriores al de la baja (`floor((mes_baja - 1) / 3)`); se cambia con `options(revaluo.baja_edificios)`. **Bajas de no-Edificios:** 0 períodos por defecto (`options(revaluo.baja_muebles_amortiza = "S")` devenga el año completo). Detalle en `docs/19_cambios_segun_doc_ricardo.md` |
+| Norma | Ley de Ganancias: bienes muebles → año de baja = **sin amortización**. Edificios: LIG art. 87, hasta el trimestre inmediato anterior al de la baja. Desde el doc 19 el R lo implementa así por defecto |
 | Ubicación en R | `04_calculo_axi.R:84-91` |
 | Equivalente en el modelo del estudio | Implícito en la diferencia VUT − VUT_LY |
 | Coincide con la referencia | **Parcial** — para Edificios coincide. Para otros rubros, el R siempre da 1 año (sin prorrateo), mientras que el spec para Rodados marca `VUT = AÑO_CIERRE − AÑO_ALTA (+1?)` que sería equivalente. El prorrateo de bajas solo aplica a Edificios |
