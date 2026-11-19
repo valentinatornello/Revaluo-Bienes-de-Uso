@@ -165,11 +165,11 @@ Las fechas pueden venir como Date de Excel, serial numerico, o texto "dd.mm.yyyy
 **Altas:**
 - Campos leidos: Asset, Cap_Date, Pstng_Date, Asset_Description2, Class, Suma_de_Acquisition
 - Se usa **Posting Date (Pstng_Date)** como fecha de alta del bien
-- Se toma el valor absoluto de Suma_de_Acquisition como VO
+- Se toma el valor de Suma_de_Acquisition **con su signo** como VO (las reversas restan; antes se usaba el valor absoluto)
 
 **Bajas:**
 - Campos leidos: Asset, Cap_Date, Pstng_Date, Asset_Description, Class, Retirement, Depr_Retired, Ret_Book_Value
-- **Filtro critico**: solo se reconocen bajas donde `abs(Ret_Book_Value) < 0.01` (bien totalmente depreciado)
+- Se reconocen **todas** las bajas, tambien las de bienes no totalmente depreciados (`Ret_Book_Value != 0`): el Excel manual 2023 saca a todos esos activos de la base. (Antes se filtraba `abs(Ret_Book_Value) < 0.01`.)
 - Se usa Posting Date como fecha de baja
 - Se usa Cap_Date como fecha original de alta (para calcular antiguedad)
 
@@ -219,16 +219,33 @@ Los movimientos que vienen del Excel LY (ejercicio anterior) se reclasifican:
 
 Esto es importante porque los movimientos historicos ya estan reflejados en el inventario LY y no deben tratarse como movimientos nuevos.
 
-### 4.4 Conversion de VU Asignada
+### 4.4 Conversion de VU Asignada y VUT LY
 
-- Para **Edificios**: la VU Asignada se lee tal cual del archivo (ya viene en trimestres)
-- Para **todos los demas rubros**: la VU Asignada se lee del archivo y se **divide por 4** (el archivo la trae en trimestres pero internamente el motor la usa en anios para estos rubros)
+El Excel del estudio trae la VU Asignada y el VUT LY de **Edificios en trimestres** (200) y los de **todos los demas rubros en anios** (ej. Rodados = 5). El motor los lleva a la unidad del criterio vigente multiplicando por `factor_unidad_archivo(rubro)`:
+
+- Criterio `"excel"` (por defecto): factor 1 para todos (sin conversion, como el Excel manual).
+- Criterio `"ricardo"`: factor 4 para los rubros que pasan a trimestres (todos salvo Edificios, que ya viene en trimestres, y Rodados, que sigue en anios).
+
+(Antes se dividia por 4 la VU de los rubros no Edificios, lo que distorsionaba la amortizacion: ej. Rodados 5 anios quedaba en 1,25.)
+
+### 4.7 Base del ejercicio anterior, VUT LY e indices
+
+- **Archivo SAP:** `importar_datos(path, inputs, anio, path_sap)` usa el SAP indicado; si no, el que lleva el anio en el nombre (ej. `...12-2023 (Tax).xlsx`) y, si ninguno lo lleva, el mas reciente. Si el nombre trae otro anio se frena con un error (antes se tomaba el primer `.xlsx` de `inputs/SAP/` por orden alfabetico, que con 2022 y 2023 en la carpeta era el de 2022: se sumaban los movimientos del ejercicio anterior). El Paso 1 muestra el archivo usado.
+- **IPC del ejercicio:** si la tabla IPC no llega al 31/12 del ejercicio se frena (esos bienes tomarian coeficiente 1 sin aviso). El IPC se lee de `inputs/parametros/indices_ipc_<anio>.xlsx` (hojas "IPC" e "IPC - VR Bajas") si existe; si no, del Excel base.
+- Si el Excel base no trae movimientos del ejercicio en curso (ej. 2023 parte del cierre 2022), el inicio del ejercicio es el cierre del archivo: en hojas anuales el VUT LY pasa a ser la columna "VUT"; en Edificios "VUT" es el flujo del ejercicio (1 a 4 trimestres: cierre = VUT LY + VUT) o el cierre pegado a mano (mayor a 4: se toma tal cual).
+- Coeficiente de bienes anteriores a 2018: 1 por defecto (Excel 2023); `options(revaluo.coef_pre2018 = "ipim")` usa el IPIM (Excel 2022).
 
 ### 4.5 Filtros aplicados
 
+- Se eliminan las filas que estan debajo de la fila de totales de cada hoja (rotulada "Totales" o, en Terrenos, la fila sin N° de activo ni fecha de alta): ahi el Excel del estudio solo lista bajas de anios anteriores, altas y bajas del mismo anio y notas, que no integran los totales del rubro
 - Se eliminan activos IFRS 16 (numero de activo comienza con "AS")
 - Se eliminan filas de tipo "totales" y "nota"
 - Se eliminan filas donde tanto VO como nro_activo_fijo son NA
+
+### 4.6 Fecha de alta
+
+- Se usa la columna "Año a tomar" (o la fecha del archivo si no existe). Si la hoja no trae "Año a tomar" (Terrenos), se aplica la fecha ajustada del estudio: antes de 01/01/1992 se toma 01/01/1992.
+- El parseo de fechas es celda por celda: un texto suelto en la columna no anula el resto.
 
 ---
 
@@ -246,13 +263,15 @@ La deteccion se hace verificando si algun activo en el inventario tiene `anio_mo
 
 ### 5.3 Incorporacion de movimientos SAP (cuando no estan en LY)
 
-Para cada rubro, si NO se detectaron movimientos del ejercicio en el LY:
+Para cada rubro, si NO se detectaron movimientos del ejercicio en el LY (el Excel base es el del ejercicio anterior):
+
+**Activos con baja en el ejercicio (regla 7, neteo):** antes de incorporar nada, los activos que figuran en las bajas SAP del rubro salen de la base LY como activos normales (pasan a ser filas de baja, ver abajo) y de las altas y transferencias del ejercicio. El Excel manual los muestra asi: el activo desaparece del cuerpo de la hoja y se lista en el bloque "Bajas" debajo de los totales. Pendiente: el documento `docs/15_proceso_manual_revaluo.md` pide prorratear las bajas parciales; hoy se saca el activo completo (5 casos en 2023, todos en Maquinas y Equipos).
 
 **Altas (normalizar_movimiento_sap):**
 - Se crea una fila con: tipo_movimiento = "alta", origen = "alta_{anio}"
 - Fecha de alta = Posting Date del SAP
-- VO = valor absoluto del monto SAP
-- VU Asignada = la del rubro (en trimestres para Edificios, en anios para el resto)
+- VO = valor SAP con su signo (las reversas restan)
+- VU Asignada = la del rubro en la unidad del criterio vigente (ver 6.2.1)
 - VUT LY = NA (se calculara en el paso 4)
 
 **Transferencias (normalizar_movimiento_sap):**
@@ -261,13 +280,11 @@ Para cada rubro, si NO se detectaron movimientos del ejercicio en el LY:
 - VO = valor tal cual (puede ser positivo o negativo)
 - direccion_movimiento = "salida" si valor < 0, "entrada" si valor >= 0
 
-**Bajas (normalizar_baja_sap):**
-- Se crea una fila con: tipo_movimiento = "baja", origen = "baja_{anio}"
-- fecha_alta = Posting Date (fecha de baja efectiva)
-- fecha_baja = Posting Date (se preserva para calculos de Edificios)
-- anio_alta y mes_alta = tomados de Cap_Date (fecha de capitalizacion original del bien)
-- VO = valor absoluto del Retirement
-- importe_movimiento_control = -abs(valor) (signo negativo para control)
+**Bajas del ejercicio (valores congelados a LY):** los activos que figuran en las bajas SAP del rubro se toman de la base LY con sus valores tal cual (VO, VU, VUT LY, fecha de alta y la columna "Amort. Histórica" del LY) y se retipan como baja (`tipo_movimiento = "baja"`, `origen = "baja_{anio}"`); `fecha_baja` = menor Posting Date SAP del activo. El SAP solo dice que activos y cuando: su monto de retiro no se usa (un activo puede tener varias lineas de retiro o retiros parciales, y el Excel saca el activo completo con sus valores LY). Verificado contra el bloque "Bajas 2023" de cada hoja del Excel 2023 (Eq. de Oficina: VO 11.608.938, acumulada 10.361.335, VR 1.247.603, flujo 1.173.606; igual en el modelo).
+
+**Bajas no identificadas (regla 2):** una baja SAP cuyo activo no esta en la base LY (ni es alta del ejercicio, que se netea) no se calcula; se informa en `bajas_no_identificadas` y como ADVERTENCIA en las validaciones (2023: 85 lineas, 78 en Maquinas y Equipos).
+
+`normalizar_baja_sap()` (fila de baja armada con los montos de SAP: fecha_alta = Posting Date, VO = Retirement) ya no se usa en el rollforward.
 
 ### 5.4 Marcado de origen
 
@@ -318,13 +335,20 @@ amort_acum_cierre_reexp = 0
 
 #### 6.2.1 Periodos por anio
 
-La unidad de devengamiento depende del rubro:
-- **Edificios**: devengamiento por **trimestre** -> periodos_por_anio = 4
-- **Todos los demas rubros**: devengamiento por **anio** -> periodos_por_anio = 1
+La unidad de devengamiento depende del rubro y del **criterio de unidad** vigente (`options(revaluo.criterio_unidad_vu = ...)`, variable de entorno `CRITERIO_UNIDAD_VU` en `_targets.R`; ver `obtener_periodos_por_anio()` en `utils.R`):
+
+| Criterio | Edificios | Rodados | Resto de los rubros |
+|---|---|---|---|
+| `"excel"` (por defecto) | trimestres (4) | anios (1) | anios (1) |
+| `"ricardo"` (SPEC 4.2) | trimestres (4) | anios (1) | trimestres (4) |
+
+- `"excel"` replica las formulas del Excel manual del estudio: Edificios con trimestres; el resto con `VUT LY = MIN(VU, anio_ejercicio - anio_alta)` y `VUT = MIN(anio_ejercicio - anio_alta + 1, VU)`, el anio de alta cuenta completo.
+- `"ricardo"` aplica la logica de Edificios (trimestre de alta, trimestre de baja, VU en trimestres) a todos los rubros salvo Rodados.
+- La VU y el VUT LY que trae el Excel LY estan en trimestres para Edificios y en anios para el resto; `factor_unidad_archivo()` los lleva a la unidad del criterio vigente (no hay mas `/ 4`).
 
 #### 6.2.2 Trimestres del primer anio de alta
 
-Solo relevante para Edificios. Calcula cuantos trimestres del primer anio corresponde devengar segun el mes de alta:
+Solo se usa en rubros trimestrales (Edificios y, con criterio `"ricardo"`, el resto salvo Rodados). Calcula cuantos trimestres del primer anio corresponde devengar segun el mes de alta:
 
 ```
 trim_primer_anio = 4 - floor((mes_alta - 1) / 3)
@@ -336,11 +360,11 @@ Ejemplos:
 - Alta en julio (mes 7): 4 - floor(6/3) = 2 trimestres
 - Alta en octubre (mes 10): 4 - floor(9/3) = 1 trimestre
 
-Para rubros NO Edificios, trim_primer_anio = 1 (siempre un periodo completo).
+Para rubros anuales, trim_primer_anio = 1 (siempre un periodo completo).
 
-#### 6.2.3 Periodos hasta baja (Edificios)
+#### 6.2.3 Periodos hasta baja (rubros trimestrales)
 
-Para edificios dados de baja, se calcula hasta que trimestre del anio corresponde devengar:
+Para bienes trimestrales dados de baja, se calcula hasta que trimestre del anio corresponde devengar:
 
 ```
 periodos_hasta_baja = floor((mes_baja - 1) / 3) + 1
@@ -351,39 +375,33 @@ Ejemplos:
 - Baja en junio: floor(5/3) + 1 = 2 (segundo trimestre)
 - Baja en diciembre: floor(11/3) + 1 = 4 (cuarto trimestre, anio completo)
 
-Para rubros NO Edificios y para no-bajas: periodos_hasta_baja = periodos_por_anio (siempre completo).
+Para rubros anuales y para no-bajas: periodos_hasta_baja = periodos_por_anio (siempre completo).
 
 #### 6.2.4 VUT LY (Vida Util Transcurrida al cierre del ejercicio anterior)
 
-Si el archivo LY ya trae el dato VUT LY, se usa directamente.
+Si el archivo LY ya trae el dato VUT LY, se usa directamente (convertido a la unidad del criterio).
 
-Si no viene (caso de altas del ejercicio), se calcula:
+Si no viene (caso de altas del ejercicio y transferencias), se calcula:
 
+- **Rubros trimestrales:**
 ```
-vut_ly_trimestres = calcular_vut_ly(anio_alta, mes_alta, anio_ejercicio, vu_asignada)
-
-Donde calcular_vut_ly:
-  Si anio_alta == anio_ejercicio:
-    vut = 0 (el bien no existia al cierre anterior)
-  Sino:
-    vut = (anio_ejercicio - anio_alta - 1) * 4 + trim_primer_anio
-    vut = min(vut, vu_asignada)  (nunca supera la VU total)
+Si anio_alta == anio_ejercicio:
+  vut_ly = 0 (el bien no existia al cierre anterior)
+Sino:
+  vut_ly = min((anio_ejercicio - anio_alta - 1) * 4 + trim_primer_anio, vu_asignada)
 ```
-
-Luego se convierte a la unidad del rubro:
+- **Rubros anuales (formula del Excel manual):**
 ```
-vut_ly = vut_ly_trimestres / 4 * periodos_por_anio
+vut_ly = min(vu_asignada, anio_ejercicio - anio_alta)     (entero; 0 si el alta es del ejercicio)
 ```
-- Para Edificios (periodos_por_anio=4): queda en trimestres
-- Para otros rubros (periodos_por_anio=1): queda en anios
 
 #### 6.2.5 VUT del ejercicio (periodos devengados en el ejercicio actual)
 
 ```
 Si anio_alta == anio_ejercicio:
-  vut_ejercicio = trim_primer_anio  (trimestres restantes del primer anio para Edificios, 1 para otros)
+  vut_ejercicio = trim_primer_anio  (trimestres restantes del primer anio en rubros trimestrales, 1 en anuales)
 Sino:
-  vut_ejercicio = periodos_hasta_baja  (4 para Edificios sin baja, 1 para otros)
+  vut_ejercicio = periodos_hasta_baja  (4 en trimestrales sin baja, 1 en anuales)
 
 vut_ejercicio = min(vut_ejercicio, vu_asignada - vut_ly)
 ```
@@ -580,19 +598,25 @@ Para cada rubro, los activos se clasifican en:
 
 ### 7.2 Prueba Global de Amortizaciones (generar_pg_amortizaciones)
 
+La PG replica la del Excel del estudio, que trabaja con la **amortizacion del ejercicio (flujo)** y no con la acumulada: "Amortizacion s/revaluo" del Excel es la suma de la columna "Amort. Historica" del ejercicio (verificado al centavo contra la PG 2023 en todos los rubros). La amortizacion del ejercicio anterior sale de la columna "Amort. Historica" del Excel LY (`amort_hist_ly`).
+
 Para cada rubro se calcula:
 
 | Componente                     | Formula                                                                                         |
 |--------------------------------|-------------------------------------------------------------------------------------------------|
-| amort_inicio                   | Suma de amort_acum_ly de activos existentes + activos que son bajas del ejercicio actual         |
-| amort_altas                    | Suma de amort_acum_cierre de las altas del ejercicio                                            |
-| amort_transferencias           | Suma de amort_acum_cierre de las transferencias del ejercicio                                   |
-| amort_bajas                    | -Suma de amort_acum_ly de las bajas del ejercicio (signo negativo: se revierte)                 |
-| bs_agotaron_vu_ly              | Suma de amort_bs_agotaron_vu_ly de activos existentes (ajuste negativo por VU agotada)          |
-| amort_hist_ejercicio_total     | Suma de amort_hist_ejercicio de activos existentes cuya VU NO esta agotada                      |
-| **amort_prueba**               | amort_inicio + amort_altas + amort_transferencias + amort_bajas + bs_agotaron_vu_ly + amort_hist_ejercicio_total |
-| **amort_revaluo**              | Suma de amort_acum_cierre de todos los activos EXCEPTO las bajas del ejercicio                  |
+| amort_inicio                   | Suma de amort_hist_ly (flujo del ejercicio anterior) de activos existentes + activos dados de baja en el ejercicio (su flujo se conserva en la fila de baja) |
+| amort_altas                    | Suma de amort_hist_ejercicio de las altas del ejercicio                                         |
+| amort_transferencias           | Suma de amort_hist_ejercicio de las transferencias del ejercicio                                |
+| amort_bajas                    | -Suma de amort_hist_ly de las bajas del ejercicio (signo negativo: se revierte)                 |
+| bs_agotaron_vu_ly              | -Suma de amort_hist_ly de activos existentes con VU agotada al cierre anterior (su amortizacion del ejercicio anterior no se repite). Equivale a la columna "Amortizacion del LY de bienes agotados" del Excel |
+| amort_irregular                | Suma de (amort_hist_ejercicio - amort_hist_ly) de activos existentes con VU no agotada: primer periodo parcial del ejercicio anterior (ej. Edificios dados de alta a mitad de anio). Equivale a "Bienes con amort. irregular" del Excel |
+| **amort_prueba**               | amort_inicio + amort_altas + amort_transferencias + amort_bajas + bs_agotaron_vu_ly + amort_irregular |
+| **amort_revaluo**              | Suma de amort_hist_ejercicio de todos los activos EXCEPTO las bajas del ejercicio (= "Amortizacion s/revaluo" del Excel) |
 | **diferencia**                 | amort_prueba - amort_revaluo (debe tender a 0)                                                  |
+
+Nota: `amort_bs_agotaron_vu_ly` (columna calculada en `04_calculo_axi.R`) ya no entra en la PG: calculaba cuota x periodos para *todos* los bienes agotados (5 a 10 veces lo que reporta el Excel). Se conserva en el resultado por compatibilidad.
+
+Control contra el Excel 2023 (millones de $): inicio Edificios 23,03, Eq. de Oficina 82,58; "agotaron VU" Software -80,15, MyU -8,81; irregular Edificios 3,21. El modelo da los mismos valores.
 
 ### 7.3 Prueba Global de Valor Residual (generar_pg_valor_residual)
 
@@ -611,17 +635,22 @@ Para cada rubro:
 
 ### 7.4 Prueba Global AXI (generar_pg_axi)
 
-Para cada rubro:
+Replica "s/revaluo" de la PG AXI del Excel del estudio: **sin las bajas del ejercicio** (salen del saldo; en el Excel se listan aparte). Incluirlas sumaba su AXI y desviaba el total (Edificios +2 M, Maquinas y Equipos +7 M). Para cada rubro:
 
 | Componente                     | Formula                                                     |
 |--------------------------------|-------------------------------------------------------------|
-| vo_reexp                       | Suma de vo_reexp de todos los activos del rubro             |
-| amort_acum_reexp               | Suma de amort_acum_cierre_reexp de todos los activos        |
-| vr_reexp                       | Suma de vr_reexp de todos los activos                       |
-| vr_hist                        | Suma de vr de todos los activos                             |
+| vo_reexp                       | Suma de vo_reexp de los activos que no son bajas del ejercicio |
+| amort_acum_reexp               | Suma de amort_acum_cierre_reexp (idem)                      |
+| amort_ejercicio_reexp          | Suma de amort_ejercicio_reexp = amort_hist_ejercicio x coeficiente de cada bien (1 para anteriores a 2018 salvo criterio IPIM). Es "Amortizacion s/revaluo" de la PG AXI; coincide al centavo con el Excel 2023 |
+| vr_reexp                       | Suma de vr_reexp (idem)                                     |
+| vr_hist                        | Suma de vr (idem)                                           |
 | **axi_resultado**              | vr_reexp - vr_hist                                          |
 
-El AXI (Ajuste por Inflacion Impositivo) es la diferencia entre el Valor Residual reexpresado y el Valor Residual historico.
+El AXI (Ajuste por Inflacion Impositivo) es la diferencia entre el Valor Residual reexpresado y el Valor Residual historico. Contra el Excel 2023 coincide en todos los rubros salvo Terrenos (VR historico pegado a mano en el Excel).
+
+Nota: `amort_hist_reexp` (solo bienes 2018+, columna "Amort. Reexp. 2018/2019/..." del Excel) se conserva; la PG usa `amort_ejercicio_reexp` porque "Amortizacion s/revaluo" del Excel incluye tambien los bienes anteriores a 2018.
+
+La PG de valor residual usa como "Bajas valor residual" el VR congelado a LY de las bajas (`vr_ly`), igual que el Excel (Edificios -11,23 M, Eq. de Oficina -1,25 M, Maquinas y Equipos -1,29 M en 2023).
 
 ---
 
@@ -675,18 +704,17 @@ Si algun activo falla: ERROR.
 
 ### 8.5 Conteos de movimientos SAP (validar_conteos_movimientos)
 
-Compara la cantidad de filas de detalle procesadas contra conteos esperados hardcodeados:
-- Altas esperadas: 4873
-- Bajas esperadas: 1717
-- Transferencias esperadas: 1738
+Compara las filas de detalle del archivo SAP (antes de filtrar por rubro, IFRS 16 y obras en curso) contra los conteos esperados del ejercicio (`CONTEOS_MOVIMIENTOS_ESPERADOS` en `utils.R`, por anio):
+- 2023: altas 4873, bajas 1717, transferencias 1738
+- 2022: altas 2978, bajas 4042, transferencias 2125
 
-Si difiere: ERROR. (Nota: estos conteos corresponden a un ejercicio especifico de validacion y pueden no aplicar a todos los anios.)
+Si difiere: ERROR. Si el ejercicio no esta en la tabla: ADVERTENCIA (conteo omitido). La auditoria tambien informa `filas_importadas` (las que quedan tras los filtros). Antes se comparaban las filas ya filtradas contra el total del archivo, por lo que el control nunca podia cuadrar.
 
 ### 8.6 Valores reexpresados negativos (validar_valores_reexpresados_negativos)
 
-Busca activos cuyo VO reexpresado o VR reexpresado sea negativo, excluyendo transferencias de salida (que legítimamente pueden ser negativas):
+Marca activos con VO o VR reexpresado negativo **cuyo VO no es negativo** (un VO negativo es una reversa o una transferencia de salida, y el Excel del estudio tiene esas filas). El ruido de punto flotante (|valor| < 0,01) no cuenta:
 ```
-Si vo_reexp < 0 o vr_reexp < 0 (y no es transferencia de salida): ERROR
+Si vo >= 0 y (vo_reexp < -0,01 o vr_reexp < -0,01): ERROR
 ```
 
 ### 8.7 Excepciones de fecha base (validar_excepciones_fecha_base)
@@ -698,9 +726,10 @@ Reporta cuantos activos por rubro tienen una excepcion de fecha base aplicada. N
 Si se proporciono el archivo de validacion externa (Excel del manual Price/KPMG), compara por rubro y en total:
 
 **Magnitudes comparadas:**
-- Amortizacion acumulada (amort_revaluo vs manual)
+- Amortizacion del ejercicio (amort_revaluo vs "Amortizacion s/revaluo" del Excel; las filas se buscan por etiqueta en las hojas PG y PG AXI, porque la posicion cambia de un anio a otro)
 - Valor Residual (vr_revaluo vs manual)
 - AXI (axi_resultado vs manual)
+- Amortizacion AXI (amort_ejercicio_reexp vs "Amortizacion s/revaluo" de la PG AXI), si el archivo la trae
 
 **Calculo de diferencia porcentual:**
 ```
@@ -712,9 +741,11 @@ Si |real| <= 0.01 y |diferencia| > 0.01: pct = 1 (100%)
 
 **Resultado:**
 ```
-Si pct <= 20%: OK
+Si pct <= 0,1% (UMBRAL_REPLICA_EXTERNA): OK (replica el Excel)
+Si pct <= 20% (TOLERANCIA_VALIDACION_EXTERNA): ADVERTENCIA (dentro de la tolerancia pero no lo replica)
 Si pct > 20%: ERROR
 ```
+(Antes era OK hasta 20%, lo que daba por bueno, por ejemplo, 2 M de diferencia de AXI en Edificios.)
 
 Se reporta rubro por rubro y tambien un TOTAL. Se muestra: valor propio, valor Price, diferencia, porcentaje de diferencia y porcentaje de igualdad.
 

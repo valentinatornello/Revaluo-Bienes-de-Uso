@@ -57,37 +57,63 @@ calcular_rubro_amortizable <- function(inv, rubro_nombre, indices_ipc, indices_i
 
   inv <- aplicar_excepciones_fecha_base(inv, excepciones_fecha_base)
 
-  trim_primer_anio <- if (rubro_nombre == "Edificios") {
+  trim_primer_anio <- if (periodos_por_anio == 4L) {
     calcular_trimestres_primer_anio(inv$mes_alta)
   } else {
     rep.int(1L, nrow(inv))
   }
+  # Ejercicio de baja: Edificios devenga los trimestres que fije revaluo.baja_edificios (por defecto, los anteriores al
+  # de la baja) y los muebles no devengan (revaluo.baja_muebles_amortiza). Ver periodos_devengados_baja().
+  es_baja_fila <- inv$tipo_movimiento_calc %in% "baja"
   periodos_hasta_baja <- rep.int(periodos_por_anio, nrow(inv))
-  es_baja_edificio <- rubro_nombre == "Edificios" &
-    inv$tipo_movimiento_calc == "baja" & !is.na(inv$fecha_baja)
-  periodos_hasta_baja[es_baja_edificio] <-
-    as.integer(floor((lubridate::month(inv$fecha_baja[es_baja_edificio]) - 1L) / 3L) + 1L)
+  if (any(es_baja_fila)) {
+    periodos_hasta_baja[es_baja_fila] <-
+      periodos_devengados_baja(rubro_nombre, inv$fecha_baja[es_baja_fila], periodos_por_anio)
+  }
+  # Baja de un bien dado de alta en el mismo ejercicio: descuenta los periodos previos al alta (piso en cero).
+  periodos_previos_alta <- periodos_por_anio - trim_primer_anio
+  periodos_primer_anio <- dplyr::if_else(
+    es_baja_fila,
+    pmax(periodos_hasta_baja - periodos_previos_alta, 0L),
+    as.integer(trim_primer_anio)
+  )
+
+  # La vida util transcurrida se cuenta desde la fecha REAL del bien; el piso de 1992 es solo para el indice.
+  anio_vut <- inv$anio_alta
+  mes_vut <- inv$mes_alta
+  if ("fecha_alta_real" %in% names(inv)) {
+    usar_real <- !is.na(inv$fecha_alta_real) & inv$fecha_alta_real < FECHA_MINIMA_REEXPRESION
+    anio_vut[usar_real] <- lubridate::year(inv$fecha_alta_real[usar_real])
+    mes_vut[usar_real] <- lubridate::month(inv$fecha_alta_real[usar_real])
+  }
+
+  # Excel manual: VUT LY = MIN(VU, anio_ejercicio - anio_alta) para rubros anuales; los trimestrales
+  # cuentan trimestres desde el trimestre de alta.
+  vut_ly_calculada <- if (periodos_por_anio == 4L) {
+    calcular_vut_ly(anio_vut, mes_vut, anio_ejercicio, inv$vu_asignada)
+  } else {
+    pmin(inv$vu_asignada, pmax(anio_ejercicio - anio_vut, 0L))
+  }
 
   inv <- inv %>%
     dplyr::mutate(
-      # Edificios devenga por trimestre; los otros rubros, por año.
+      # Los rubros trimestrales devengan por trimestre; los anuales, por anio completo.
       trim_primer_anio = trim_primer_anio,
       periodos_hasta_baja = periodos_hasta_baja,
 
-      vut_ly = dplyr::if_else(
-        !is.na(vut_ly),
-        vut_ly,
-        calcular_vut_ly(anio_alta, mes_alta, anio_ejercicio, vu_asignada) /
-          4L * periodos_por_anio
-      ),
+      vut_ly = dplyr::if_else(!is.na(vut_ly), vut_ly, vut_ly_calculada),
 
-      vut_ejercicio = pmin(
-        dplyr::if_else(
-          anio_alta == anio_ejercicio,
-          trim_primer_anio,
-          periodos_hasta_baja
+      # piso en cero: con la VUT LY por encima de la VU no se resta vida util al cierre
+      vut_ejercicio = pmax(
+        pmin(
+          dplyr::if_else(
+            anio_alta == anio_ejercicio,
+            periodos_primer_anio,
+            periodos_hasta_baja
+          ),
+          vu_asignada - vut_ly
         ),
-        vu_asignada - vut_ly
+        0
       ),
 
       vut_cierre = pmin(vut_ly + vut_ejercicio, vu_asignada),
@@ -118,9 +144,10 @@ calcular_rubro_amortizable <- function(inv, rubro_nombre, indices_ipc, indices_i
         0
       ),
 
+      # tope en la VU: hay filas del historico con VUT informada mayor a la VU
       amort_acum_ly = dplyr::if_else(
         vu_asignada > 0,
-        amort_trimestre * vut_ly,
+        amort_trimestre * pmin(vut_ly, vu_asignada),
         0
       ),
 
@@ -138,7 +165,7 @@ calcular_rubro_amortizable <- function(inv, rubro_nombre, indices_ipc, indices_i
         1
       ),
 
-      coef_ipim = buscar_coeficiente(fecha_indice_reexp, indices_ipim),
+      coef_ipim = coeficiente_pre_2018(fecha_indice_reexp, indices_ipim),
 # EVALUAR SI ES EL IPC O EL IPIM EL COEFICIENTE AL QUE TENEMOS QUE MULTIPLICAR EL VO DE LOS BIENES DADOS DE BAJA, SEGUN EL ANIO DE ALTA
       vo_reexp = dplyr::if_else(
         anio_alta >= ANIO_CORTE_REVALUO,
@@ -150,6 +177,14 @@ calcular_rubro_amortizable <- function(inv, rubro_nombre, indices_ipc, indices_i
         anio_alta >= ANIO_CORTE_REVALUO,
         amort_hist_2018 * coef_ipc,
         0
+      ),
+
+      # "Amort. Reexp." del Excel: amortizacion del ejercicio por el coeficiente de cada bien (los anteriores a 2018
+      # llevan su coeficiente, que es 1 salvo criterio IPIM); es la base de "Amortizacion s/revaluo" de la PG AXI.
+      amort_ejercicio_reexp = amort_hist_ejercicio * dplyr::if_else(
+        anio_alta >= ANIO_CORTE_REVALUO,
+        coef_ipc,
+        coef_ipim
       ),
 
       amort_acum_ly_reexp = dplyr::if_else(
@@ -186,8 +221,8 @@ calcular_rubro_amortizable <- function(inv, rubro_nombre, indices_ipc, indices_i
       )
     )
 
-  inv <- calcular_bajas_reexp(inv, indices_ipc_bajas, indices_ipim_bajas)
-# 
+  inv <- calcular_bajas_reexp(inv, indices_ipc_bajas, indices_ipim_bajas, anio_ejercicio)
+
   inv
 }
 
@@ -195,6 +230,8 @@ calcular_rubro_amortizable <- function(inv, rubro_nombre, indices_ipc, indices_i
 # y mantiene VR igual al VO reexpresado.
 calcular_terrenos <- function(inv, indices_ipc, indices_ipim, anio_ejercicio,
                               excepciones_fecha_base = SCHEMA_EXCEPCIONES_FECHA_BASE) {
+  if (!"tipo_movimiento_calc" %in% names(inv)) inv$tipo_movimiento_calc <- NA_character_
+
   inv <- inv %>%
     dplyr::mutate(
       vo = tidyr::replace_na(vo, 0),
@@ -221,7 +258,7 @@ calcular_terrenos <- function(inv, indices_ipc, indices_ipim, anio_ejercicio,
   inv <- inv %>%
     dplyr::mutate(
       coef_ipc = buscar_coeficiente(fecha_indice_reexp, indices_ipc),
-      coef_ipim = buscar_coeficiente(fecha_indice_reexp, indices_ipim),
+      coef_ipim = coeficiente_pre_2018(fecha_indice_reexp, indices_ipim),
 
       vo_reexp = dplyr::if_else(
         anio_alta >= ANIO_CORTE_REVALUO,
@@ -231,55 +268,75 @@ calcular_terrenos <- function(inv, indices_ipc, indices_ipim, anio_ejercicio,
       amort_hist_reexp = 0,
       amort_acum_ly_reexp = 0,
       amort_acum_cierre_reexp = 0,
+      amort_ejercicio_reexp = 0,
       vr_reexp = vo_reexp,
 
-      amort_bajas = 0,
-      vr_bajas = 0
-    )
-
-  inv
-}
-
-# Calcula la reexpresión de amortización acumulada y VR únicamente para bienes dados de baja,
-# usando IPC o IPIM de bajas según corresponda por año de alta.
-calcular_bajas_reexp <- function(inv, indices_ipc_bajas, indices_ipim_bajas) {
-  inv <- inv %>%
-    dplyr::mutate(
-      es_baja = (tipo_movimiento_calc == "baja"),
-
-      coef_ipc_bajas = dplyr::if_else(
-        es_baja & anio_alta >= ANIO_CORTE_REVALUO,
-        buscar_coeficiente(fecha_indice_reexp, indices_ipc_bajas),
-        0
-      ),
-
-      coef_ipim_bajas = dplyr::if_else(
-        es_baja & anio_alta < ANIO_CORTE_REVALUO,
-        buscar_coeficiente(fecha_indice_reexp, indices_ipim_bajas),
-        0
-      ),
-
-      # reexpresamos amort y VR de bajas usando el coeficiente correspondiente
-      amort_bajas = dplyr::if_else(
-        es_baja,
-        dplyr::if_else(
-          anio_alta >= ANIO_CORTE_REVALUO,
-          amort_acum_cierre * coef_ipc_bajas,
-          amort_acum_cierre * coef_ipim_bajas
-        ),
-        0
-      ),
-
-      vr_bajas = dplyr::if_else(
-        es_baja,
-        dplyr::if_else(
-          anio_alta >= ANIO_CORTE_REVALUO,
-          vr * coef_ipc_bajas,
-          vr * coef_ipim_bajas
-        ),
-        0
+      es_baja = tipo_movimiento_calc %in% "baja",
+      coef_ipc_bajas = 0,
+      coef_ipim_bajas = 0,
+      coef_baja = dplyr::if_else(
+        es_baja, dplyr::if_else(anio_alta >= ANIO_CORTE_REVALUO, coef_ipc, coef_ipim), 0
       )
     )
 
-  inv
+  separar_saldo_baja(inv)
+}
+
+# Coeficiente de reexpresion de las bajas (tabla "VR Bajas"): bienes anteriores a 2018 -> coeficiente_pre_2018()
+# (1 por defecto, como el Excel manual 2023); dados de alta en el propio ejercicio -> 1; resto -> IPC de bajas.
+calcular_coeficientes_bajas <- function(inv, indices_ipc_bajas, indices_ipim_bajas, anio_ejercicio = NA_integer_) {
+  es_baja <- inv$tipo_movimiento_calc %in% "baja"
+  coef_ipc <- rep(0, nrow(inv))
+  coef_ipim <- rep(0, nrow(inv))
+
+  idx_ipc <- which(es_baja & inv$anio_alta >= ANIO_CORTE_REVALUO)
+  if (length(idx_ipc) > 0) {
+    coef_ipc[idx_ipc] <- buscar_coeficiente(inv$fecha_indice_reexp[idx_ipc], indices_ipc_bajas)
+    coef_ipc[idx_ipc[inv$anio_alta[idx_ipc] %in% anio_ejercicio]] <- 1
+  }
+
+  idx_ipim <- which(es_baja & inv$anio_alta < ANIO_CORTE_REVALUO)
+  if (length(idx_ipim) > 0) {
+    coef_ipim[idx_ipim] <- coeficiente_pre_2018(inv$fecha_indice_reexp[idx_ipim], indices_ipim_bajas)
+  }
+
+  list(ipc = coef_ipc, ipim = coef_ipim)
+}
+
+# Calcula la reexpresión de amortización acumulada y VR únicamente para bienes dados de baja,
+# usando IPC o IPIM de bajas según corresponda por año de alta, y separa su saldo del cierre.
+calcular_bajas_reexp <- function(inv, indices_ipc_bajas, indices_ipim_bajas, anio_ejercicio = NA_integer_) {
+  coef <- calcular_coeficientes_bajas(inv, indices_ipc_bajas, indices_ipim_bajas, anio_ejercicio)
+
+  inv <- inv %>%
+    dplyr::mutate(
+      es_baja = (tipo_movimiento_calc == "baja"),
+      coef_ipc_bajas = coef$ipc,
+      coef_ipim_bajas = coef$ipim,
+      coef_baja = dplyr::if_else(
+        es_baja, dplyr::if_else(anio_alta >= ANIO_CORTE_REVALUO, coef_ipc_bajas, coef_ipim_bajas), 0
+      )
+    )
+
+  separar_saldo_baja(inv)
+}
+
+# Un bien dado de baja no tiene saldo al cierre: VO, amortizacion acumulada y valor residual de cierre (historicos y
+# reexpresados) quedan en 0 y lo que se retira va en columnas propias (*_baja), reexpresado con coef_baja.
+separar_saldo_baja <- function(inv) {
+  inv %>%
+    dplyr::mutate(
+      vo_baja = dplyr::if_else(es_baja, vo, 0),
+      amort_acum_baja = dplyr::if_else(es_baja, amort_acum_cierre, 0),
+      vr_baja = dplyr::if_else(es_baja, vr, 0),
+      vo_baja_reexp = vo_baja * coef_baja,
+      amort_bajas = amort_acum_baja * coef_baja,
+      vr_bajas = vr_baja * coef_baja,
+      vo_cierre = dplyr::if_else(es_baja, 0, vo),
+      amort_acum_cierre = dplyr::if_else(es_baja, 0, amort_acum_cierre),
+      vr = dplyr::if_else(es_baja, 0, vr),
+      vo_reexp = dplyr::if_else(es_baja, 0, vo_reexp),
+      amort_acum_cierre_reexp = dplyr::if_else(es_baja, 0, amort_acum_cierre_reexp),
+      vr_reexp = dplyr::if_else(es_baja, 0, vr_reexp)
+    )
 }

@@ -167,8 +167,8 @@ flowchart LR
    - Si es terreno → `calcular_terrenos()`: sin amortización, solo reexpresión
    - Si no → `calcular_rubro_amortizable()`:
      1. `aplicar_excepciones_fecha_base()` → setea `fecha_indice_reexp`
-     2. Calcula `trim_primer_anio`: para Edificios = `4 - floor((mes-1)/3)`; para otros = 1
-     3. Calcula `vut_ly` (si no viene del LY): `calcular_vut_ly()` → trimestres → divide por 4 × periodos_por_anio
+     2. Calcula `trim_primer_anio`: en rubros trimestrales = `4 - floor((mes-1)/3)`; en anuales = 1
+     3. Calcula `vut_ly` (si no viene del LY): trimestrales → `calcular_vut_ly()`; anuales → `min(VU, año_ejercicio - año_alta)` (fórmula del Excel manual)
      4. Calcula `vut_ejercicio`: min(periodos_disponibles, vu_asignada - vut_ly)
      5. `amort_trimestre = vo / vu_asignada`
      6. `amort_hist_ejercicio = amort_trimestre × vut_ejercicio` (solo si vut_ly < vu_asignada)

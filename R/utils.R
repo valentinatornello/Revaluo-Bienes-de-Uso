@@ -40,12 +40,19 @@ PARAMETROS_RUBROS <- tibble::tribble(
 )
 
 ANIO_CORTE_REVALUO <- 2018
+# Los bienes anteriores a esta fecha se reexpresan como si hubieran ingresado en ella (fecha ajustada del estudio).
+FECHA_MINIMA_REEXPRESION <- as.Date("1992-01-01")
 
+# Filas de detalle (sin filtrar por rubro) de cada archivo SAP "Altas-bajas-Transf", por ejercicio.
+# Solo se valida el conteo si el ejercicio figura aca.
 CONTEOS_MOVIMIENTOS_ESPERADOS <- tibble::tribble(
-  ~tipo_movimiento_sap, ~conteo_esperado,
-  "alta",              4873L,
-  "baja",              1717L,
-  "transferencia",     1738L
+  ~anio, ~tipo_movimiento_sap, ~conteo_esperado,
+  2022L, "alta",              2978L,
+  2022L, "baja",              4042L,
+  2022L, "transferencia",     2125L,
+  2023L, "alta",              4873L,
+  2023L, "baja",              1717L,
+  2023L, "transferencia",     1738L
 )
 
 TOLERANCIA_PRUEBA_GLOBAL <- 1
@@ -53,6 +60,8 @@ UMBRAL_ERROR_PRUEBA_GLOBAL <- 100
 TOLERANCIA_CONSISTENCIA_INTERNA <- 0.01
 # tolerancia porcentual aceptada al comparar contra el manual real (Price/KPMG): 20% de diferencia = 80% de igualdad
 TOLERANCIA_VALIDACION_EXTERNA <- 0.20
+# diferencia (como fraccion) por debajo de la cual se considera que el modelo replica el Excel del estudio
+UMBRAL_REPLICA_EXTERNA <- 0.001
 
 SCHEMA_EXCEPCIONES_FECHA_BASE <- tibble::tibble(
   rubro = character(),
@@ -93,6 +102,7 @@ ALIAS_RUBROS <- c(
   "maquinas mejoras"              = "Maquinas Mejoras",
   "mejoras maquinas"              = "Maquinas Mejoras",
   "mejoras maquinas y equipos"    = "Maquinas Mejoras",
+  "mejoras maquinas y eq"         = "Maquinas Mejoras",
   "mejoras de maquinas y equipos" = "Maquinas Mejoras",
   "myu"                           = "MyU",
   "muebles y utiles"              = "MyU",
@@ -191,24 +201,111 @@ buscar_coeficiente <- function(fechas_alta, tabla_indices) {
   }, numeric(1))
 }
 
+# Coeficiente de los bienes anteriores a 2018 (no se reexpresan con IPC):
+#   "unitario" (por defecto) = 1, como el Excel manual 2023 (=SI(anio<2018;1;IPC)) y el escenario A del SPEC.
+#   "ipim" = coeficiente IPIM, como el Excel manual 2022 (=SI(anio<2018;IPIM;IPC)).
+coeficiente_pre_2018 <- function(fechas, tabla_ipim) {
+  criterio <- getOption("revaluo.coef_pre2018", "unitario")
+  if (!criterio %in% c("unitario", "ipim")) {
+    stop(sprintf("revaluo.coef_pre2018 '%s' invalido (validos: unitario, ipim)", criterio), call. = FALSE)
+  }
+  if (criterio == "ipim") buscar_coeficiente(fechas, tabla_ipim) else rep(1, length(fechas))
+}
+
 obtener_vu_trimestres <- function(rubro) {
   match_idx <- match(rubro, PARAMETROS_RUBROS$rubro)
   ifelse(is.na(match_idx), NA_real_, PARAMETROS_RUBROS$vu_trimestres[match_idx])
+}
+
+# Criterio de unidad de la VU/VUT fuera de Edificios (se lee en cada llamada para poder cambiarlo
+# con options(revaluo.criterio_unidad_vu = ...)):
+#   "excel"   = replica el Excel manual del estudio: Edificios en trimestres, el resto en anios.
+#   "trimestres" = todo en trimestres salvo Rodados, que sigue en anios (SPEC 4.2). Es una opcion de prueba, no el
+#                  criterio validado. Antes se llamaba "ricardo": se sigue aceptando con un aviso.
+CRITERIOS_UNIDAD_VU <- c("excel", "trimestres")
+RUBROS_EN_ANIOS_CRITERIO_TRIMESTRES <- "Rodados"
+
+criterio_unidad_vu <- function() {
+  criterio <- getOption("revaluo.criterio_unidad_vu", "excel")
+  if (identical(criterio, "ricardo")) {
+    warning("El criterio 'ricardo' se renombro a 'trimestres'; se usa 'trimestres'.", call. = FALSE)
+    criterio <- "trimestres"
+  }
+  if (!criterio %in% CRITERIOS_UNIDAD_VU) {
+    stop(sprintf(
+      "criterio_unidad_vu '%s' invalido (validos: %s)", criterio, paste(CRITERIOS_UNIDAD_VU, collapse = ", ")
+    ), call. = FALSE)
+  }
+  criterio
+}
+
+# Periodos de amortizacion por anio: 4 si el rubro se devenga por trimestre, 1 si es por anio.
+obtener_periodos_por_anio <- function(rubro) {
+  trimestral <- rubro == "Edificios" |
+    (criterio_unidad_vu() == "trimestres" & !rubro %in% RUBROS_EN_ANIOS_CRITERIO_TRIMESTRES)
+  ifelse(trimestral, 4L, 1L)
+}
+
+# Amortizacion del ejercicio de baja en Edificios (LIG art. 87: "hasta el trimestre inmediato anterior a aquel en que
+# los bienes se enajenen o desafecten"). Se cambia con options(revaluo.baja_edificios = ...):
+#   "N" = trimestres anteriores al de la baja (ley, por defecto)   "S" = incluye el trimestre de la baja
+#   "A" = anio completo                                            "E" = nada (lo que hace el estudio)
+CRITERIOS_BAJA_EDIFICIOS <- c("N", "S", "A", "E")
+
+criterio_baja_edificios <- function() {
+  criterio <- getOption("revaluo.baja_edificios", "N")
+  if (!criterio %in% CRITERIOS_BAJA_EDIFICIOS) {
+    stop(sprintf(
+      "revaluo.baja_edificios '%s' invalido (validos: %s)", criterio, paste(CRITERIOS_BAJA_EDIFICIOS, collapse = ", ")
+    ), call. = FALSE)
+  }
+  criterio
+}
+
+# Bienes muebles (rubros que no son Edificios): "N" = no se amortiza el ejercicio de baja (por defecto),
+# "S" = se amortiza el anio completo. Se cambia con options(revaluo.baja_muebles_amortiza = ...).
+baja_muebles_amortiza <- function() {
+  criterio <- getOption("revaluo.baja_muebles_amortiza", "N")
+  if (!criterio %in% c("S", "N")) {
+    stop(sprintf("revaluo.baja_muebles_amortiza '%s' invalido (validos: S, N)", criterio), call. = FALSE)
+  }
+  criterio == "S"
+}
+
+# Periodos (trimestres en Edificios, anios en el resto) que devenga en el ejercicio un bien dado de baja,
+# contando desde el inicio del ejercicio. Sin fecha de baja se toma el ejercicio completo en Edificios.
+periodos_devengados_baja <- function(rubro, fecha_baja, periodos_por_anio) {
+  n <- length(fecha_baja)
+  if (identical(rubro, "Edificios")) {
+    trim_baja <- floor((lubridate::month(fecha_baja) - 1L) / 3L) + 1L
+    periodos <- switch(
+      criterio_baja_edificios(),
+      N = trim_baja - 1L,
+      S = trim_baja,
+      A = rep.int(4L, n),
+      E = rep.int(0L, n)
+    )
+    return(as.integer(dplyr::coalesce(as.integer(periodos), 4L)))
+  }
+  rep.int(if (baja_muebles_amortiza()) as.integer(periodos_por_anio) else 0L, n)
+}
+
+# Los Excel del estudio guardan VU y VUT LY de Edificios en trimestres y los de los demas rubros
+# en anios; devuelve el factor para llevar esos valores a la unidad operativa del criterio vigente.
+factor_unidad_archivo <- function(rubro) {
+  periodos_archivo <- ifelse(rubro == "Edificios", 4L, 1L)
+  obtener_periodos_por_anio(rubro) / periodos_archivo
 }
 
 obtener_vu_asignada <- function(rubro) {
   match_idx <- match(rubro, PARAMETROS_RUBROS$rubro)
   if (is.na(match_idx)) return(NA_real_)
 
-  if (rubro == "Edificios") {
+  if (obtener_periodos_por_anio(rubro) == 4L) {
     PARAMETROS_RUBROS$vu_trimestres[match_idx]
   } else {
     PARAMETROS_RUBROS$vu_anios[match_idx]
   }
-}
-
-obtener_periodos_por_anio <- function(rubro) {
-  ifelse(rubro == "Edificios", 4L, 1L)
 }
 
 es_terreno <- function(rubro) {
